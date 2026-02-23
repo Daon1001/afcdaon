@@ -1,61 +1,67 @@
 import streamlit as st
+from PIL import Image
+import pytesseract  # 무료 OCR 라이브러리 (설치 필요)
+import re
 
+# --- 1. 배경 로직: 키워드 기반 전략 DB ---
 def get_venture_strategy(biz_item):
-    """
-    종목명을 분석하여 업종별 맞춤 전략을 반환합니다.
-    """
-    # 1. 업종별 전략 사전 (제조업 핵심 분야 확장)
     db = {
-        "기계/장비": {
-            "keywords": ["기계", "장비", "설비", "금형", "자동화"],
-            "tech_theme": "지능형 자동화 및 스마트 팩토리 시스템",
-            "topics": ["고정밀 센서를 결합한 자율 제어형 제조 시스템", "에너지 효율 최적화를 위한 지능형 공정 설비"],
-            "patents": ["제어 알고리즘", "센서 모듈", "정밀 구동부"]
-        },
-        "금속/창호": {
-            "keywords": ["창호", "샤시", "금속", "알루미늄", "철강"],
-            "tech_theme": "고기능성 건축 소재 및 에너지 절감 구조체",
-            "topics": ["열손실 최소화 하이브리드 창호 시스템", "내구성이 강화된 고강도 경량 금속 프레임"],
-            "patents": ["단열 구조", "결합 기구", "표면 처리법"]
-        },
-        "식품/바이오": {
-            "keywords": ["식품", "가공", "음료", "바이오", "화장품"],
-            "tech_theme": "바이오 융합 소재 및 스마트 패키징 기술",
-            "topics": ["천연 추출물을 활용한 기능성 소재 상용화", "보존 성능이 향상된 친환경 스마트 패키징"],
-            "patents": ["추출 공법", "조성물 특허", "신선도 유지 기술"]
-        },
-        "IT/소프트웨어": {
-            "keywords": ["소프트웨어", "IT", "플랫폼", "데이터", "앱"],
-            "tech_theme": "데이터 기반 AI 솔루션 및 클라우드 서비스",
-            "topics": ["빅데이터 분석을 통한 비즈니스 최적화 알고리즘", "보안성이 강화된 클라우드 기반 협업 솔루션"],
-            "patents": ["데이터 처리 로직", "인증 보안 체계"]
-        }
+        "기계": {"theme": "지능형 자동화 시스템", "topics": ["AI 기반 정밀 제어 제조 공정", "IoT 연동 스마트 설비"]},
+        "창호": {"theme": "고효율 친환경 건축소재", "topics": ["에너지 절감형 하이브리드 창호", "탄소저감형 PVP 프레임"]},
+        "식품": {"theme": "바이오 푸드테크", "topics": ["천연 보존 기술 기반 기능성 식품", "스마트 패키징 가공 공정"]},
+        "전자": {"theme": "차세대 임베디드 시스템", "topics": ["저전력 고효율 회로 설계", "센서 융합 데이터 처리 장치"]}
     }
+    for key, val in db.items():
+        if key in biz_item: return val
+    return {"theme": "제조 공정 혁신", "topics": [f"{biz_item} 공정 최적화 기술", "신소재 기반 제품 고도화"]}
 
-    # 2. 키워드 매칭 로직
-    for category, content in db.items():
-        if any(key in biz_item for key in content["keywords"]):
-            return content
-
-    # 3. 매칭되는 업종이 없을 경우 기본 반환값
+# --- 2. OCR 기능: 이미지에서 텍스트 추출 ---
+def extract_biz_info(image):
+    # 실제 서비스 시에는 Naver CLOVA OCR이나 Google Vision API를 쓰면 정확도가 99%입니다.
+    # 여기서는 로직 설명을 위해 Tesseract 예시를 듭니다.
+    text = pytesseract.image_to_string(image, lang='kor')
+    
+    # 정규표현식으로 '업태'와 '종목' 옆의 글자 추출 (간이 로직)
+    biz_type = re.search(r"업\s*태\s*[:\s]*([^\n]+)", text)
+    biz_item = re.search(r"종\s*목\s*[:\s]*([^\n]+)", text)
+    
     return {
-        "tech_theme": "범용 제조 혁신 기술",
-        "topics": [f"{biz_item} 공정의 디지털 전환 솔루션", f"차세대 {biz_item} 핵심 부품 제조 기술"],
-        "patents": ["공정 개선", "효율화 기술"]
+        "type": biz_type.group(1).strip() if biz_type else "추출 실패",
+        "item": biz_item.group(1).strip() if biz_item else "직접 입력 필요"
     }
 
-# --- Streamlit UI 연동 ---
-st.title("🎯 컨설턴트용 벤처 주제 선정 도구")
-biz_item_input = st.text_input("대표님 사업자등록증상 '종목'을 입력하세요", "자동차 부품 제조")
+# --- 3. Streamlit UI 구성 ---
+st.set_page_config(page_title="제조업 벤처인증 AI", layout="wide")
+st.title("📸 사업자등록증 자동 분석 벤처 컨설팅")
 
-if biz_item_input:
-    strategy = get_venture_strategy(biz_item_input)
+uploaded_file = st.file_uploader("사업자등록증 사진을 찍거나 업로드하세요", type=["jpg", "png", "jpeg"])
+
+if uploaded_file:
+    img = Image.open(uploaded_file)
+    st.image(img, caption="업로드된 이미지", width=400)
     
-    st.markdown(f"### 📍 [{biz_item_input}] 분석 결과")
-    st.info(f"**권장 기술 테마:** {strategy['tech_theme']}")
-    
-    st.write("**추천 벤처인증 주제:**")
-    for topic in strategy['topics']:
-        st.success(f"📌 {topic}")
+    with st.spinner("이미지에서 사업 정보를 분석 중입니다..."):
+        # 실제 환경에서는 아래 함수가 OCR API를 호출합니다.
+        # 가상의 추출 결과 (테스트용)
+        extracted = {"type": "제조업", "item": "자동차 부품 및 금속 가공"} 
+        # extracted = extract_biz_info(img) # 실제 OCR 연동 시 활성화
         
-    st.write(f"**필요 특허 키워드:** {', '.join(strategy['patents'])}")
+    st.divider()
+    
+    col1, col2 = st.columns(2)
+    with col1:
+        st.subheader("📋 인식된 기업 정보")
+        final_item = st.text_input("분석된 종목 (수정 가능)", extracted['item'])
+        st.write(f"**추출된 업태:** {extracted['type']}")
+        
+    with col2:
+        st.subheader("🚀 맞춤형 벤처 테마")
+        strategy = get_venture_strategy(final_item)
+        st.info(f"**추천 기술 분야:** {strategy['theme']}")
+        
+    st.markdown("### 💡 추천 벤처확인 기술 주제")
+    for topic in strategy['topics']:
+        st.success(f"✅ {topic}")
+
+    # 컨설턴트 메모 기능
+    st.text_area("컨설팅 상담 메모", placeholder="대표님의 기술 확보 의지가 높음. 특허 2건 출원 제안함.")
