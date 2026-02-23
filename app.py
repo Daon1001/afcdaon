@@ -4,7 +4,7 @@ from PIL import Image
 
 # --- 0. 페이지 설정 ---
 st.set_page_config(page_title="벤처인증 AI 마스터 컨설턴트", layout="wide")
-st.title("🏛️ 벤처인증 · 특허 · 정책자금 통합 컨설팅 리포트")
+st.title("🏛️ 벤처인증 · 특허 · 정책자금 통합 컨설팅 대시보드")
 
 # --- 1. [유지] 동적 모델 할당 로직 ---
 try:
@@ -62,46 +62,61 @@ with col2:
         else:
             with st.spinner('베테랑 컨설턴트의 시각으로 자금 로드맵까지 설계 중입니다...'):
                 form_prompt = f"""
-                당신은 20년 경력의 대한민국 최고의 벤처인증 및 정책자금 전문 컨설턴트입니다. 
-                신청기술 [{selected_topic}]에 대해 다음 항목들을 공백 포함 각 700자 내외로 풍부하게 작성하세요.
+                신청기술 [{selected_topic}]에 대해 다음 항목들을 각각 전문적인 문체로 상세히 작성하세요. 
+                각 항목의 구분은 반드시 '### [항목명]' 형식을 유지하세요.
 
-                [작성 항목]
-                1. **신청기술 요약 및 표준 양식**: (V형태 양식 포함)
-                2. **개발배경(동기) 및 원인분석**: (산업 구조적 문제 분석)
-                3. **경쟁력 확보방안**: (기술적 차별성 및 진입장벽)
-                4. **추진경과**: (현재까지의 R&D 및 지식재산권 확보 실적)
-                5. **향후 3년간 추진계획**: (연도별 상용화 로드맵)
-                6. **목표시장 및 고객정의**: (확보할 시장 규모 및 성장률 근거)
-                7. **경쟁사 분석**: (기존 방식 대비 당사 기술의 우위성)
-                8. **시장진입 및 확대전략 - 추진경과/향후계획**: (마케팅 실적 및 3개년 점유율 확대 전략)
-                9. **자금조달 계획의 구체적 방안**: (자금 선순환 구조 설계)
-                10. **지식재산권 확보 전략 제안**: (등록 가능한 특허 명칭 3가지 및 핵심 청구항 아이디어)
-                
-                [보너스 섹션: 연계 가능한 정책자금 추천]
-                - 벤처인증 획득 후 해당 기술로 신청 가능한 **정부 정책자금 3가지**를 추천하세요. (예: 중진공 창업기반자금, 기보 벤처평가보증, 혁신성장자금 등)
-                - 각 자금별 신청 적기와 예상되는 지원 규모, 그리고 선정 확률을 높이기 위한 핵심 포인트를 전문가적 시선에서 제안하세요.
-
-                [문체 지침]
-                - 베테랑 컨설턴트가 직접 상담하는 듯한 전문적이고 신뢰감 있는 문체를 사용하세요.
+                ### [1. 신청기술 요약 및 표준 양식]
+                (V형태 양식 포함)
+                ### [2. 개발배경 및 원인분석]
+                (산업 구조적 문제 분석, 700자 내외)
+                ### [3. 경쟁력 확보방안]
+                (기술적 차별성 및 진입장벽, 700자 내외)
+                ### [4. 추진경과 및 향후 계획]
+                (R&D 실적 및 3개년 로드맵, 700자 내외)
+                ### [5. 목표시장 및 고객정의]
+                (시장 규모 및 성장률 근거, 700자 내외)
+                ### [6. 경쟁사 분석 및 우위성]
+                (기존 방식 한계점 대비 우위성, 700자 내외)
+                ### [7. 시장진입 및 확대전략]
+                (추진경과 및 향후 3개년 상세 계획, 700자 내외)
+                ### [8. 자금조달 및 특허 전략]
+                (자금 선순환 구조 및 추천 특허 3종, 700자 내외)
+                ### [9. 연계 가능 정책자금 추천]
+                (중진공/기보/신보 자금 및 선정 포인트, 700자 내외)
                 """
                 try:
+                    # 이미지 유무에 따른 호출 분기
                     if uploaded_file:
-                        img = Image.open(uploaded_file)
-                        response = model.generate_content([form_prompt, img])
+                        response = model.generate_content([form_prompt, Image.open(uploaded_file)])
                     else:
                         response = model.generate_content(form_prompt)
-                    st.session_state.final_report = response.text
+                    
+                    # 결과를 항목별로 쪼개서 세션에 저장
+                    report_text = response.text
+                    sections = report_text.split('### ')
+                    st.session_state.report_sections = [s for s in sections if s.strip()]
                 except Exception as e:
                     st.error(f"오류: {e}")
 
-# --- 3. 결과 출력 및 다운로드 ---
+# --- 3. 결과 출력 (드롭박스 형태) ---
 st.divider()
-if 'final_report' in st.session_state:
-    st.subheader("📄 벤처인증 · 특허 · 정책자금 통합 마스터 리포트")
-    st.download_button("리포트 다운로드(.txt)", st.session_state.final_report, file_name="venture_finance_report.txt")
-    
-    st.markdown(f"""
-    <div style="background-color: #f8f9fa; padding: 30px; border-radius: 15px; border-left: 10px solid #0056b3; line-height: 1.8;">
-        {st.session_state.final_report.replace('\n', '<br>')}
-    </div>
-    """, unsafe_allow_html=True)
+if 'report_sections' in st.session_state:
+    st.subheader("📄 항목별 상세 컨설팅 리포트")
+    st.write("각 항목을 클릭하여 상세 내용을 확인하세요.")
+
+    # 전체 다운로드를 위한 텍스트 합치기
+    full_report = "\n\n".join(st.session_state.report_sections)
+    st.download_button("전체 리포트 다운로드(.txt)", full_report, file_name="venture_master_report.txt")
+
+    # 항목별 드롭박스 생성
+    for section in st.session_state.report_sections:
+        lines = section.split('\n')
+        title = lines[0].strip('[] ') # 제목 추출
+        content = '\n'.join(lines[1:]).strip() # 내용 추출
+        
+        with st.expander(f"📌 {title}", expanded=False):
+            st.markdown(f"""
+            <div style="background-color: #f8f9fa; padding: 20px; border-radius: 10px; line-height: 1.8;">
+                {content.replace('\n', '<br>')}
+            </div>
+            """, unsafe_allow_html=True)
