@@ -1,55 +1,50 @@
 import streamlit as st
-import pandas as pd
+from PIL import Image
+import time
 
-# 1. 가상의 벤처 테마 데이터베이스 (업종별 매칭 테이블)
+# 1. 벤처 인증 테마 데이터베이스
 VENTURE_DB = {
-    "창호 제조업": ["IoT 연동 스마트 윈도우 시스템", "친환경 재생 수지 활용 고단열 프레임", "에너지 제로 하우스용 진공 유리"],
-    "금속 가공업": ["AI 기반 정밀 금형 설계 자동화", "고강도 경량 마그네슘 합금 부품", "로봇 협동 공정 최적화 솔루션"],
-    "소프트웨어": ["B2B SaaS 기업용 탄소배출 관리 시스템", "생성형 AI 기반 법률 문서 분석 플랫폼", "블록체인 기반 공급망 투명성 확보"]
+    "창호": ["IoT 연동 스마트 윈도우 시스템", "에너지 절감형 고단열 창호 프레임"],
+    "금속": ["정밀 공정 자동화 로봇 시스템", "고강도 경량 합금 부품 제조 기술"],
+    "소프트웨어": ["AI 기반 업무 자동화 솔루션", "클라우드 보안 데이터 플랫폼"],
+    "기계": ["스마트 팩토리 연동형 생산 설비", "저전력 고효율 구동 모터 기술"]
 }
 
-st.set_page_config(page_title="벤처인증 테마 추천 시스템", layout="wide")
-st.title("🚀 벤처인증 유망 주제 검색 & 협업 툴")
+st.title("📂 AI 사업자등록증 자동 분석기")
+st.info("사업자등록증을 업로드하면 '종목'을 분석해 벤처 주제를 제안합니다.")
 
-# 사이드바: 팀원 선택 및 메뉴
-st.sidebar.header("Team Workspace")
-user_name = st.sidebar.selectbox("담당 팀원 선택", ["허자현 팀장", "김철수 대리", "이영희 사원"])
+# 2. 파일 업로드 섹션
+uploaded_file = st.file_uploader("사업자등록증 파일을 선택하세요", type=["jpg", "png", "pdf"])
 
-# 메인 기능 탭
-tab1, tab2 = st.tabs(["🔍 종목 분석 및 추천", "📊 팀 히스토리 공유"])
-
-with tab1:
-    st.subheader("사업자등록증 업로드 및 종목 분석")
-    uploaded_file = st.file_uploader("사업자등록증 이미지(JPG, PNG)를 업로드하세요.", type=["jpg", "png", "pdf"])
+if uploaded_file is not None:
+    # 이미지 표시
+    image = Image.open(uploaded_file)
+    st.image(image, caption="업로드된 사업자등록증", width=400)
     
-    # 예시를 위해 직접 입력 기능 추가
-    target_item = st.text_input("또는 분석할 '종목명'을 직접 입력하세요 (예: 창호 제조업)")
+    with st.spinner('AI가 종목 정보를 분석 중입니다...'):
+        # --- 실제 환경에서는 여기서 OCR 엔진이 구동됩니다 ---
+        time.sleep(2) # 분석 시뮬레이션
+        detected_item = "창호 제조업" # 예시: OCR이 찾아낸 단어
+        # ---------------------------------------------
+        
+    st.success(f"✅ 분석 완료! 인식된 종목: **[{detected_item}]**")
     
-    if st.button("벤처인증 유망 주제 추출"):
-        if target_item:
-            st.success(f"'{target_item}' 종목에 적합한 벤처인증 주제를 찾았습니다!")
+    # 3. 주제 매칭 및 결과 출력
+    st.subheader("💡 추천 벤처 인증 주제")
+    
+    # 종목 키워드 포함 여부로 DB 검색
+    matched = False
+    for key, themes in VENTURE_DB.items():
+        if key in detected_item:
+            for i, theme in enumerate(themes):
+                st.info(f"**추천 {i+1}:** {theme}")
+            matched = True
+            break
             
-            # DB 매칭 로직 (간이형)
-            results = VENTURE_DB.get(target_item, ["신규 분야: 기술성 분석 및 특허 선행 조사가 필요합니다."])
-            
-            for i, theme in enumerate(results):
-                with st.expander(f"추천 주제 {i+1}: {theme}"):
-                    st.write("✅ **핵심 기술:** 해당 분야의 독창적 알고리즘 또는 신소재 적용")
-                    st.write("📈 **사업 확장성:** 국내외 시장 규모 000억 원대 시장 진입 가능성")
-                    if st.button(f"주제 {i+1} 저장하기", key=f"btn_{i}"):
-                        st.info("팀 대시보드에 저장되었습니다.")
-        else:
-            st.warning("종목명을 입력하거나 파일을 업로드해주세요.")
+    if not matched:
+        st.warning("해당 종목에 대한 전용 테마가 없습니다. 일반 제조업/서비스업 기술성 평가 모델을 적용합니다.")
 
-with tab2:
-    st.subheader("전체 팀원 분석 현황")
-    # 샘플 데이터 (실제로는 DB나 Google Sheet 연동)
-    data = {
-        "날짜": ["2026-02-21", "2026-02-22", "2026-02-23"],
-        "담당자": ["김철수", "이영희", "허자현"],
-        "업체명": ["(주)가나다창호", "에이비씨소프트", "진성금속"],
-        "선정주제": ["스마트 윈도우 센서", "AI 보안 솔루션", "공정 자동화 로봇"],
-        "진행상태": ["서류준비", "검토중", "인증완료"]
-    }
-    df = pd.DataFrame(data)
-    st.table(df)
+# 4. 팀원 공유 기능
+if st.button("결과를 팀 대시보드에 저장"):
+    st.balloons()
+    st.write("저장되었습니다! 이제 다른 팀원들도 이 분석 결과를 볼 수 있습니다.")
