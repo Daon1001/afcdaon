@@ -1,0 +1,3 @@
+streamlit
+pandas
+pillow  # 이미지 처리용
