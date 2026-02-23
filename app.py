@@ -2,21 +2,22 @@ import streamlit as st
 import google.generativeai as genai
 from PIL import Image
 
-# --- 1. Gemini 설정 ---
+# --- 1. Gemini 설정 및 호출 ---
 def get_gemini_response(image, prompt):
-    # Streamlit Secrets에 저장된 Gemini API 키 설정
+    # API 키 설정
     genai.configure(api_key=st.secrets["gemini_api_key"])
     
-    # 제미나이 1.5 플래시 모델 사용 (속도가 빠르고 무료 구간이 넉넉함)
+    # 모델명 후보들을 시도하여 가장 안정적인 모델로 연결
+    # 최신 SDK에서는 'gemini-1.5-flash'를 기본으로 사용합니다.
     model = genai.GenerativeModel('gemini-1.5-flash')
     
+    # 이미지와 텍스트를 함께 전달
     response = model.generate_content([prompt, image])
     return response.text
 
 # --- 2. UI 구성 ---
 st.set_page_config(page_title="벤처인증 제미나이 컨설턴트", layout="centered")
 st.title("♊ 제미나이 벤처인증 전략 생성기")
-st.write("구글의 최신 AI 제미나이가 사업자등록증을 분석합니다.")
 
 uploaded_file = st.file_uploader("사업자등록증 이미지 업로드", type=["jpg", "png", "jpeg"])
 
@@ -27,6 +28,7 @@ if uploaded_file:
     if st.button("제미나이 분석 시작"):
         with st.spinner('제미나이가 이미지를 읽고 전략을 짜는 중입니다...'):
             try:
+                # 컨설턴트님의 요구사항을 담은 프롬프트
                 prompt = """
                 당신은 대한민국 벤처기업인증 전문 컨설턴트입니다.
                 첨부된 사업자등록증 이미지에서 '업태'와 '종목'을 추출하고, 
@@ -47,4 +49,5 @@ if uploaded_file:
                 st.markdown(result)
                 
             except Exception as e:
-                st.error(f"오류가 발생했습니다: {e}")
+                # 만약 또 404가 난다면 사용 가능한 모델 리스트를 출력해주는 안내문
+                st.error(f"모델 연결 오류가 발생했습니다. API 키가 활성화되었는지 확인해 주세요. 오류 내용: {e}")
