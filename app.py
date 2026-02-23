@@ -41,14 +41,32 @@ col1, col2 = st.columns(2)
 with col1:
     st.subheader("1️⃣ 분석 및 추천")
     uploaded_file = st.file_uploader("사업자등록증 업로드", type=["jpg", "png", "jpeg"])
+    
     if uploaded_file:
         img = Image.open(uploaded_file)
         st.image(img, width=300)
+        
+        # --- [추가 섹션] 필수 서류 인지 안내 ---
+        st.warning("🔔 **벤처인증 신청을 위해 아래 9가지 서류를 미리 준비해 주세요!**")
+        st.markdown("""
+        업로드하신 사업자등록증 외에 다음 서류가 추가로 필요합니다:
+        * ✅ **사업자등록증** (현재 완료)
+        * 📋 **법인등기부등본** (말소사항 포함)
+        * 📋 **부가가치세표준증명원**
+        * 📋 **재무제표 (최근 3개년치)**
+        * 📋 **고용보험 사업장 취득자 명부**
+        * 📋 **4대보험 가입자 명부**
+        * 📋 **대표자 건강보험자격득실확인서**
+        * 📋 **주주명부** (명판 및 인감 날인)
+        * 📋 **연구개발인정서** (기업부설연구소 또는 전담부서)
+        """)
+        
         if st.button("AI 기술 주제 추천받기"):
             with st.spinner('종목 분석 중...'):
                 prompt = "사업자등록증의 종목을 분석하여 벤처인증용 혁신 기술 주제 3개를 전문적인 제목으로 제안해줘."
                 response = model.generate_content([prompt, img])
                 st.session_state.suggestions = response.text
+                
     if 'suggestions' in st.session_state:
         st.success(st.session_state.suggestions)
 
