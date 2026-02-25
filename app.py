@@ -27,7 +27,7 @@ if input_password != WEEKLY_PASSWORD:
     본 프로그램은 승인된 사용자만 이용 가능합니다.  
     이용 권한 및 코드 발급은 아래 연락처로 문의해 주세요.
     
-    **임원근 컨설턴트: {MY_CONTACT}**
+    **임원근 지사장님께: {MY_CONTACT}**
     """)
     st.stop() # 인증 실패 시 아래 모든 로직 실행 중단
 
@@ -155,3 +155,4 @@ if 'report_sections' in st.session_state:
         content = '\n'.join(lines[1:]).strip()
         with st.expander(f"📌 {title}", expanded=False):
             st.markdown(f"<div style='background-color: #f8f9fa; padding: 25px; border-radius: 12px; line-height: 1.9; border-left: 6px solid #007bff;'>{content.replace('\n', '<br>')}</div>", unsafe_allow_html=True)
+
