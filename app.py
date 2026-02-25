@@ -12,16 +12,23 @@ except ImportError:
 # --- 0. 페이지 설정 ---
 st.set_page_config(page_title="벤처인증 AI 마스터 컨설턴트", layout="wide")
 
-# --- [보안 로직] 이번 주 비밀번호 설정 ---
-# 컨설턴트님이 원하실 때 이 부분을 수정하여 배포하면 즉시 차단됩니다.
-WEEKLY_PASSWORD = "다온251001" 
+# --- [보안 로직] 이번 주 비밀번호 및 연락처 설정 ---
+# 매주 월요일 이 비밀번호만 수정하여 배포하시면 됩니다.
+WEEKLY_PASSWORD = "251001" 
+MY_CONTACT = "010-9254-1128"
 
 st.sidebar.title("🔐 접근 권한 인증")
 input_password = st.sidebar.text_input("이번 주 인증 코드를 입력하세요", type="password")
 
 if input_password != WEEKLY_PASSWORD:
     st.title("🏛️ 벤처인증 통합 컨설팅 대시보드")
-    st.warning("⚠️ 인증 코드가 올바르지 않습니다. 임원근 컨설턴트님께 문의하여 코드를 발급받으세요.")
+    st.error(f"""
+    ### 🔒 인증 코드가 올바르지 않습니다.
+    본 프로그램은 승인된 사용자만 이용 가능합니다.  
+    이용 권한 및 코드 발급은 아래 연락처로 문의해 주세요.
+    
+    **임원근 컨설턴트: {MY_CONTACT}**
+    """)
     st.stop() # 인증 실패 시 아래 모든 로직 실행 중단
 
 # --- 1. [인증 성공 시] 동적 모델 할당 로직 ---
@@ -51,7 +58,7 @@ if not target_model_name and available_models:
     target_model_name = available_models[0]
 
 model = genai.GenerativeModel(target_model_name)
-st.sidebar.success(f"✅ 가동 중인 AI 엔진: **{target_model_name}**")
+st.sidebar.success(f"✅ 인증 성공! 가동 엔진: **{target_model_name}**")
 st.title("🏛️ 벤처인증 통합 컨설팅 대시보드")
 
 # --- 2. UI 레이아웃 ---
@@ -112,7 +119,6 @@ with col2:
                 각 항목의 구분은 반드시 '### [항목명]' 형식을 유지하세요.
 
                 ### [1. 신청기술 요약 및 표준 양식]
-                (V자 양식 포함)
                 ### [2. 개발배경 및 원인분석]
                 ### [3. 경쟁력 확보방안]
                 ### [4. 추진경과 및 향후 계획]
@@ -136,7 +142,7 @@ with col2:
                 except Exception as e:
                     st.error(f"오류: {e}")
 
-# --- 3. 결과 출력 ---
+# --- 3. 결과 출력 (드롭박스 형태) ---
 st.divider()
 if 'report_sections' in st.session_state:
     st.subheader("📄 벤처인증 마스터 컨설팅 리포트")
