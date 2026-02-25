@@ -18,7 +18,7 @@ except KeyError:
     st.stop()
 
 # 반드시 구글 콘솔의 '리디렉션 URI'와 일치해야 함
-REDIRECT_URI = "https://your-app-name.streamlit.app/" 
+REDIRECT_URI = "https://afcdaon-q8nrfdizms9kcgzxtbbq3u.streamlit.app/" 
 ALLOWED_EMAILS = ["incheon00@gmail.com", "01092541128@gmail.com"]
 
 # --- 2. 구글 로그인 로직 (표준 Flow 방식) ---
@@ -90,4 +90,5 @@ with col1:
     st.subheader("1️⃣ 분석 및 서류 가이드")
     uploaded_file = st.file_uploader("사업자등록증 업로드", type=["jpg", "png", "jpeg", "pdf"])
     # ... [기존 코드 동일하게 유지] ...
+
 
