@@ -15,7 +15,6 @@ except ImportError:
 
 # --- [1. 보안 및 환경 설정] ---
 try:
-    # Streamlit Cloud의 Secrets에서 값을 가져옵니다.
     GOOGLE_CLIENT_ID = st.secrets["GOOGLE_CLIENT_ID"]
     GOOGLE_CLIENT_SECRET = st.secrets["GOOGLE_CLIENT_SECRET"]
     GEMINI_API_KEY = st.secrets["gemini_api_key"]
@@ -23,17 +22,17 @@ except KeyError:
     st.error("⚠️ Secrets 설정이 누락되었습니다. (GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, gemini_api_key)")
     st.stop()
 
-# 구글 콘솔에 등록한 리디렉션 URI (정확히 일치해야 함)
+# 실제 배포 주소 (구글 콘솔 리디렉션 URI와 100% 일치해야 함)
 REDIRECT_URI = "https://your-app-name.streamlit.app" 
 
-# 승인된 이메일 목록 (화이트리스트)
+# 승인된 이메일 목록
 ALLOWED_EMAILS = [
     "incheon00@gmail.com", 
     "01092541128@gmail.com"
 ]
+MY_CONTACT = "010-9254-1128"
 
-# --- [2. 구글 인증 로직] 최신 라이브러리 규격(딕셔너리 방식) 적용 ---
-# 이 방식이 TypeError를 해결하는 핵심입니다.
+# --- [2. 구글 인증 로직] 라이브러리 버전 호환성 강화 ---
 auth_config = {
     "web": {
         "client_id": GOOGLE_CLIENT_ID,
@@ -44,18 +43,39 @@ auth_config = {
     }
 }
 
-authenticator = Authenticate(
-    secret_credential_dict=auth_config,  # 딕셔너리 형태로 전달
-    cookie_name='venture_auth_cookie',
-    cookie_key='venture_master_secret_key',
-    redirect_uri=REDIRECT_URI,
-    cookie_expiry_days=1
-)
+# 라이브러리 인자명 충돌 해결을 위한 이중 시도 로직
+try:
+    # 최신 버전 방식 시도
+    authenticator = Authenticate(
+        secret_credential_dict=auth_config,
+        cookie_name='venture_auth_cookie',
+        cookie_key='venture_master_secret_key',
+        redirect_uri=REDIRECT_URI,
+        cookie_expiry_days=1
+    )
+except TypeError:
+    try:
+        # 구버전 또는 대체 인자명 방식 시도
+        authenticator = Authenticate(
+            secret_credentials=auth_config,
+            cookie_name='venture_auth_cookie',
+            key='venture_master_secret_key',
+            cookie_expiry_days=1
+        )
+    except Exception as e:
+        st.error(f"인증 객체 생성 중 오류가 발생했습니다: {e}")
+        st.stop()
 
-# 인증 상태 확인
-authenticator.check_authentication()
+# 인증 상태 확인 함수 호출 (스펠링 호환성 체크)
+try:
+    authenticator.check_authentication()
+except AttributeError:
+    try:
+        authenticator.check_authentification()
+    except Exception:
+        pass
 
-# 로그인 전 화면
+# 로그인 전 화면 처리
 if not st.session_state.get('connected'):
     st.title("🏛️ 벤처인증 통합 컨설팅 대시보드")
     st.info("💡 서비스를 이용하시려면 사이드바의 [Google로 로그인] 버튼을 클릭해 주세요.")
@@ -67,7 +87,7 @@ user_info = st.session_state.get('user_info')
 if user_info:
     user_email = user_info.get('email')
     if user_email not in ALLOWED_EMAILS:
-        st.error(f"🔒 [{user_email}]님은 등록되지 않은 계정입니다. 임원근 컨설턴트(010-9254-1128)에게 문의하세요.")
+        st.error(f"🔒 [{user_email}]님은 등록되지 않은 계정입니다. 임원근 컨설턴트({MY_CONTACT})에게 문의하세요.")
         if st.sidebar.button("로그아웃"):
             authenticator.logout()
         st.stop()
@@ -83,7 +103,6 @@ if user_info:
     genai.configure(api_key=GEMINI_API_KEY)
     model = genai.GenerativeModel('gemini-1.5-flash')
 
-    # 업무 레이아웃
     col1, col2 = st.columns(2)
 
     with col1:
@@ -122,22 +141,10 @@ if user_info:
                 st.warning("기술명을 입력해 주세요.")
             else:
                 with st.spinner('리포트 생성 중...'):
-                    # 11대 항목 프롬프트
                     form_prompt = f"""
-                    신청기술 [{selected_topic}]에 대해 다음 11개 항목 리포트를 작성하세요. 
-                    항목 구분은 '### [항목명]' 형식을 유지하고 전문적인 문체를 사용하세요.
-
-                    ### [1. 신청기술 요약 및 표준 양식] (V자 양식 포함)
-                    ### [2. 개발배경 및 원인분석] (산업 구조적 문제 분석)
-                    ### [3. 경쟁력 확보방안] (기술적 차별성 및 진입장벽)
-                    ### [4. 추진경과 및 향후 계획] (R&D 실적 및 3개년 로드맵)
-                    ### [5. 목표시장 및 고객정의] (시장 규모 및 성장률 근거)
-                    ### [6. 경쟁사 분석 및 우위성] (기존 방식 대비 우위성)
-                    ### [7. 시장진입 및 확대전략 - 추진경과] (마케팅 실적 및 시장 반응)
-                    ### [8. 시장진입 및 확대전략 - 향후계획] (3개년 점유율 확대 전략)
-                    ### [9. 지식재산권 및 특허 전략] (추천 특허 3종 및 청구항 아이디어)
-                    ### [10. 자금조달 계획의 구체적 방안] (자금 선순환 구조 설계)
-                    ### [11. 연계 가능 정책자금 추천] (중진공/기보/신보 자금 및 선정 포인트)
+                    신청기술 [{selected_topic}]에 대해 11개 항목 리포트를 작성하세요. 
+                    항목 구분은 '### [항목명]' 형식을 유지하세요.
+                    [1. 요약, 2. 개발배경, 3. 경쟁력확보, 4. 추진경과, 5. 목표시장, 6. 경쟁사분석, 7. 시장진입(경과), 8. 시장진입(계획), 9. 특허전략, 10. 자금조달, 11. 정책자금추천]
                     """
                     try:
                         response = model.generate_content([form_prompt, analysis_image]) if analysis_image else model.generate_content(form_prompt)
