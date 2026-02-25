@@ -2,4 +2,5 @@ streamlit
 google-generativeai
 Pillow
 pdf2image
-streamlit-google-auth
+google-auth-oauthlib
+google-auth-httplib2
