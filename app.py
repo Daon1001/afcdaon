@@ -14,7 +14,7 @@ st.set_page_config(page_title="벤처인증 AI 마스터 컨설턴트", layout="
 
 # --- [보안 로직] 이번 주 비밀번호 설정 ---
 # 컨설턴트님이 원하실 때 이 부분을 수정하여 배포하면 즉시 차단됩니다.
-WEEKLY_PASSWORD = "다온251001" 
+WEEKLY_PASSWORD = "251001" 
 
 st.sidebar.title("🔐 접근 권한 인증")
 input_password = st.sidebar.text_input("이번 주 인증 코드를 입력하세요", type="password")
@@ -149,3 +149,4 @@ if 'report_sections' in st.session_state:
         content = '\n'.join(lines[1:]).strip()
         with st.expander(f"📌 {title}", expanded=False):
             st.markdown(f"<div style='background-color: #f8f9fa; padding: 25px; border-radius: 12px; line-height: 1.9; border-left: 6px solid #007bff;'>{content.replace('\n', '<br>')}</div>", unsafe_allow_html=True)
+
