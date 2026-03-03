@@ -2,41 +2,125 @@ import streamlit as st
 import google.generativeai as genai
 from PIL import Image
 import io
+import pandas as pd
+from datetime import datetime, date
 
-# PDF 처리를 위한 라이브러리 (배포 시 packages.txt에 poppler-utils 필요)
+# PDF 처리를 위한 라이브러리 (배포 시 packages.txt 필수)
 try:
     from pdf2image import convert_from_bytes
 except ImportError:
     pass
 
-# --- [0. 페이지 설정 및 보안] ---
+# --- [0. 페이지 설정] ---
 st.set_page_config(page_title="벤처인증 AI 마스터 컨설턴트", layout="wide")
 
-# 🔒 패스워드 설정 (원하실 때 이 부분을 수정하여 배포하세요)
-WEEKLY_PASSWORD = "251001" 
+# --- [1. 사용자 관리 및 사용량 DB (자체 승인 시스템)] ---
+if 'user_db' not in st.session_state:
+    # 관리자 계정 설정 (원근님 요청 반영: incheon00@gmail.com 관리자 추가)
+    st.session_state.user_db = pd.DataFrame([
+        {"email": "incheon00@gmail.com", "approved": True, "is_admin": True, "created_at": "2026-02-14", "usage_count": 0, "last_month": date.today().month},
+        {"email": "임원근@gmail.com", "approved": True, "is_admin": True, "created_at": "2026-02-14", "usage_count": 0, "last_month": date.today().month},
+        {"email": "01092541128@gmail.com", "approved": True, "is_admin": True, "created_at": "2026-02-26", "usage_count": 0, "last_month": date.today().month}
+    ])
 
-st.sidebar.title("🔐 접근 권한 인증")
-input_password = st.sidebar.text_input("이번 주 인증 코드를 입력하세요", type="password")
+if 'authenticated_user' not in st.session_state:
+    st.session_state.authenticated_user = None
 
-if input_password != WEEKLY_PASSWORD:
+# 📊 월간 횟수 제한 설정 (인당 월 30회)
+MAX_MONTHLY_LIMIT = 10
+
+# --- [2. 사이드바: 로그인 및 승인 신청 시스템] ---
+with st.sidebar:
+    st.title("🔐 접근 제어")
+    
+    if st.session_state.authenticated_user is None:
+        login_email = st.text_input("이메일 입력", placeholder="example@gmail.com").strip().lower()
+        col_login, col_req = st.columns(2)
+        
+        if col_login.button("로그인", use_container_width=True, type="primary"):
+            user_row = st.session_state.user_db[st.session_state.user_db['email'] == login_email]
+            if not user_row.empty:
+                if user_row.iloc[0]['approved']:
+                    st.session_state.authenticated_user = login_email
+                    st.rerun()
+                else:
+                    st.error("❌ 승인 대기 중입니다. 관리자 승인을 기다려주세요.")
+            else:
+                st.warning("⚠️ 등록되지 않은 이메일입니다. [승인 신청]을 먼저 하세요.")
+
+        if col_req.button("승인 신청", use_container_width=True):
+            if not login_email:
+                st.error("이메일을 입력해주세요.")
+            else:
+                user_row = st.session_state.user_db[st.session_state.user_db['email'] == login_email]
+                if user_row.empty:
+                    new_user = {
+                        "email": login_email, 
+                        "approved": False, 
+                        "is_admin": False, 
+                        "created_at": datetime.now().strftime("%Y-%m-%d"),
+                        "usage_count": 0,
+                        "last_month": date.today().month
+                    }
+                    st.session_state.user_db = pd.concat([st.session_state.user_db, pd.DataFrame([new_user])], ignore_index=True)
+                    st.info("📩 승인 신청 완료! 관리자에게 승인을 요청하세요.")
+                else:
+                    st.warning("이미 등록(신청)된 이메일입니다.")
+    else:
+        st.success(f"👤 로그인 중: {st.session_state.authenticated_user}")
+        if st.button("로그아웃", use_container_width=True):
+            st.session_state.authenticated_user = None
+            st.rerun()
+
+    # 사용량 표시 UI
+    if st.session_state.authenticated_user:
+        st.divider()
+        idx = st.session_state.user_db[st.session_state.user_db['email'] == st.session_state.authenticated_user].index[0]
+        
+        current_month = date.today().month
+        if st.session_state.user_db.at[idx, 'last_month'] != current_month:
+            st.session_state.user_db.at[idx, 'usage_count'] = 0
+            st.session_state.user_db.at[idx, 'last_month'] = current_month
+            
+        user_usage = st.session_state.user_db.at[idx, 'usage_count']
+        remaining = MAX_MONTHLY_LIMIT - user_usage
+        st.caption("🛡️ 개인별 월간 사용량")
+        st.write(f"나의 사용량: **{user_usage} / {MAX_MONTHLY_LIMIT}**")
+        st.progress(min(user_usage / MAX_MONTHLY_LIMIT, 1.0))
+
+# --- [3. 로그인 체크 및 AI 설정] ---
+if st.session_state.authenticated_user is None:
     st.title("🏛️ 벤처인증 통합 컨설팅 대시보드")
-    st.warning("⚠️ 인증 코드가 올바르지 않습니다. 임원근 컨설턴트님께 문의하여 코드를 발급받으세요.")
-    st.stop() # 패스워드 틀릴 시 아래 로직 전체 차단
-
-# --- [1. AI 엔진 설정] ---
-try:
-    API_KEY = st.secrets["gemini_api_key"] 
-    genai.configure(api_key=API_KEY)
-    # 가장 성능이 안정적인 모델로 우선 할당
-    model = genai.GenerativeModel('gemini-1.5-flash')
-    st.sidebar.success("✅ AI 엔진 가동 중: gemini-1.5-flash")
-except Exception:
-    st.error("⚠️ Secrets 설정에서 API 키를 찾을 수 없습니다.")
+    st.info("💡 사이드바에서 이메일 로그인 후 이용 가능합니다.")
     st.stop()
 
-st.title("🏛️ 벤처인증 통합 컨설팅 대시보드")
+try:
+    API_KEY = st.secrets["gemini_api_key"]
+    genai.configure(api_key=API_KEY)
+    model = genai.GenerativeModel('gemini-1.5-flash')
+except:
+    st.error("⚠️ Secrets 설정에서 API 키를 확인하세요.")
+    st.stop()
 
-# --- [2. UI 레이아웃] ---
+# --- [4. 관리자 전용: 사용자 승인 제어판] ---
+user_idx = st.session_state.user_db[st.session_state.user_db['email'] == st.session_state.authenticated_user].index[0]
+if st.session_state.user_db.at[user_idx, 'is_admin']:
+    with st.expander("👑 관리자 전용: 사용자 승인 및 관리", expanded=False):
+        st.write("현재 등록된 사용자 목록")
+        st.dataframe(st.session_state.user_db, use_container_width=True)
+        
+        target_email = st.selectbox("승인/해제 대상 선택", st.session_state.user_db['email'])
+        c1, c2 = st.columns(2)
+        if c1.button("✅ 승인 처리", use_container_width=True):
+            st.session_state.user_db.loc[st.session_state.user_db['email'] == target_email, 'approved'] = True
+            st.success(f"{target_email} 승인 완료!")
+            st.rerun()
+        if c2.button("🚫 승인 해제", use_container_width=True):
+            st.session_state.user_db.loc[st.session_state.user_db['email'] == target_email, 'approved'] = False
+            st.rerun()
+
+# --- [5. 메인 UI: 분석 및 리포트 완전판 로직] ---
+st.title("🏛️ 벤처인증 통합 컨설팅 대시보드")
 col1, col2 = st.columns(2)
 
 with col1:
@@ -49,25 +133,35 @@ with col1:
             try:
                 pages = convert_from_bytes(uploaded_file.read())
                 if pages: analysis_image = pages[0]
-            except Exception as e:
-                st.error(f"PDF 변환 오류: {e}. 시스템에 poppler가 설치되어 있어야 합니다.")
+            except Exception:
+                st.error("PDF 변환 오류가 발생했습니다. poppler 설정을 확인하세요.")
         else:
             analysis_image = Image.open(uploaded_file)
         
-        st.warning("🔔 **벤처인증 신청 필수 서류 9가지 준비 확인**")
+        st.warning("🔔 **벤처인증 신청을 위해 아래 9가지 서류를 미리 준비해 주세요!**")
         st.markdown("""
         * ✅ **사업자등록증** (현재 완료)
-        * 📋 **법인등기부등본** | 📋 **부가가치세표준증명원**
-        * 📋 **재무제표(3년)** | 📋 **고용/4대보험 명부**
-        * 📋 **자격득실확인서** | 📋 **주주명부** | 📋 **연구개발인정서**
+        * 📋 **법인등기부등본** (말소사항 포함)
+        * 📋 **부가가치세표준증명원**
+        * 📋 **재무제표 (최근 3개년치)**
+        * 📋 **고용보험 사업장 취득자 명부**
+        * 📋 **4대보험 가입자 명부**
+        * 📋 **대표자 건강보험자격득실확인서**
+        * 📋 **주주명부** (명판 및 인감 날인)
+        * 📋 **연구개발인정서** (연구소 또는 전담부서)
         """)
         
         if st.button("AI 기술 주제 추천받기"):
-            with st.spinner('종목 분석 중...'):
-                prompt = "사업자등록증의 종목을 분석하여 벤처인증용 혁신 기술 주제 3개를 전문적인 제목으로 제안해줘."
-                response = model.generate_content([prompt, analysis_image])
-                st.session_state.suggestions = response.text
-                
+            if st.session_state.user_db.at[user_idx, 'usage_count'] >= MAX_MONTHLY_LIMIT:
+                st.error("이번 달 사용 횟수를 초과했습니다.")
+            else:
+                with st.spinner('종목 분석 중...'):
+                    prompt = "사업자등록증의 종목을 분석하여 벤처인증용 혁신 기술 주제 3개를 전문적인 제목으로 제안해줘."
+                    response = model.generate_content([prompt, analysis_image])
+                    st.session_state.suggestions = response.text
+                    st.session_state.user_db.at[user_idx, 'usage_count'] += 1
+                    st.rerun()
+
     if 'suggestions' in st.session_state:
         st.success(st.session_state.suggestions)
 
@@ -76,11 +170,13 @@ with col2:
     selected_topic = st.text_input("신청기술명 입력:", placeholder="기술명을 입력하거나 왼쪽에서 복사하세요.")
     
     if st.button("마스터 리포트 생성 🚀", type="primary"):
-        if not selected_topic:
+        if st.session_state.user_db.at[user_idx, 'usage_count'] >= MAX_MONTHLY_LIMIT:
+            st.error("이번 달 사용 횟수를 초과했습니다.")
+        elif not selected_topic:
             st.warning("기술명을 입력해 주세요.")
         else:
-            with st.spinner('베테랑 컨설턴트의 시각으로 상세 리포트를 생성 중입니다...'):
-                # 🚀 V자 표준 요약 양식이 강제 적용된 프롬프트
+            with st.spinner('베테랑 컨설턴트의 시각으로 11개 항목 리포트를 생성 중입니다...'):
+                # 🚀 11개 항목 및 V자 양식 가이드라인 (누락 없이 전체 포함)
                 form_prompt = f"""
                 당신은 20년 경력의 대한민국 최고의 벤처인증 전문 컨설턴트입니다. 
                 신청기술 [{selected_topic}]에 대해 다음 11개 항목을 각각 전문적인 문체로 상세히 작성하세요. 
@@ -89,12 +185,12 @@ with col2:
 
                 특히 [1. 신청기술 요약 및 표준 양식]은 반드시 아래 형식을 엄격히 준수하여 출력하세요:
 
-                신청기술(제품/서비스)명: [신청기술명]
+                신청기술(제품/서비스)명: [{selected_topic}]
                 신청기술(제품/서비스)요약: [기술의 핵심 정의와 특징 요약]
                 (벤처확인에 신청하고자 하는 기술(제품/서비스)에 대해 기술명과 간략한 소개를 작성해주시면 됩니다)
                 V 기존 시장에 [문제점/불편사항] 니즈(문제)가 있는데, [기존 방식 한계] 이유로 사람들이 여전히 필요로 하고(불편을 겪고) 있음
                 V 당사에서 [당사 해결 기술 방식]으로 해결책을 찾았으며, 이는 기존 시장의 기술과 비교하여 [차별화 강점 3가지]의 차이를 보유하고 있음
-                V 현재 당사에서 보유 또는 개발 중인 기술명은 [기술명]으로써, 전체 시장은 국내 기준 약 [금액] 규모이며 연평균 [성장률]%의 성장을 기대할 수 있음
+                V 현재 당사에서 보유 또는 개발 중인 기술명은 [{selected_topic}]으로써, 전체 시장은 국내 기준 약 [금액] 규모이며 연평균 [성장률]%의 성장을 기대할 수 있음
                 V 당사 기술은 [핵심 원천 기술]에 기반하여 [기술적 특성 3가지] 특징을 갖고 있으며 혁신적인 해결책으로, 잠재고객들의 만족도가 훨씬 높을 수 있음
                 V 기술에 대한 지식재산권을 출원 준비 중이며 [인원]명의 연구개발 조직을 보유하는 등 지속 발전이 가능한 기술적 역량을 보유하고 있음
                 V 시장 진입을 위해 마케팅 활동을 진행 중으로 현재 [금액] 정도의 시장을 확보하고 있으며, 향후 3년간 유통망 강화 등의 마케팅 계획을 수립함
@@ -118,10 +214,12 @@ with col2:
                     report_text = response.text
                     sections = report_text.split('### ')
                     st.session_state.report_sections = [s for s in sections if s.strip()]
+                    st.session_state.user_db.at[user_idx, 'usage_count'] += 1
+                    st.rerun()
                 except Exception as e:
                     st.error(f"리포트 생성 오류: {e}")
 
-# --- [3. 결과 출력] ---
+# --- [6. 결과 출력] ---
 st.divider()
 if 'report_sections' in st.session_state:
     st.subheader("📄 벤처인증 마스터 컨설팅 리포트")
@@ -129,8 +227,9 @@ if 'report_sections' in st.session_state:
     st.download_button("전체 리포트 다운로드(.txt)", full_report, file_name="venture_master_report.txt")
 
     for section in st.session_state.report_sections:
-        lines = section.split('\n')
-        title = lines[0].strip('[] ')
-        content = '\n'.join(lines[1:]).strip()
-        with st.expander(f"📌 {title}", expanded=False):
-            st.markdown(f"<div style='background-color: #f8f9fa; padding: 25px; border-radius: 12px; line-height: 1.9; border-left: 6px solid #007bff;'>{content.replace('\n', '<br>')}</div>", unsafe_allow_html=True)
+        if section.strip():
+            lines = section.split('\n')
+            title = lines[0].strip('[] ')
+            content = '\n'.join(lines[1:]).strip()
+            with st.expander(f"📌 {title}", expanded=False):
+                st.markdown(f"<div style='background-color: #f8f9fa; padding: 25px; border-radius: 12px; line-height: 1.9; border-left: 6px solid #007bff;'>{content.replace('\n', '<br>')}</div>", unsafe_allow_html=True)
