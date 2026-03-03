@@ -16,7 +16,7 @@ st.set_page_config(page_title="벤처인증 AI 마스터 컨설턴트", layout="
 
 # --- [1. 사용자 관리 및 사용량 DB (자체 승인 시스템)] ---
 if 'user_db' not in st.session_state:
-    # 관리자 계정 설정 (원근님 요청 반영: incheon00@gmail.com 관리자 추가)
+    # 관리자 계정 설정 (원근님 요청 반영: incheon00@gmail.com)
     st.session_state.user_db = pd.DataFrame([
         {"email": "incheon00@gmail.com", "approved": True, "is_admin": True, "created_at": "2026-02-14", "usage_count": 0, "last_month": date.today().month},
         {"email": "임원근@gmail.com", "approved": True, "is_admin": True, "created_at": "2026-02-14", "usage_count": 0, "last_month": date.today().month},
@@ -26,8 +26,8 @@ if 'user_db' not in st.session_state:
 if 'authenticated_user' not in st.session_state:
     st.session_state.authenticated_user = None
 
-# 📊 월간 횟수 제한 설정 (인당 월 30회)
-MAX_MONTHLY_LIMIT = 10
+# 📊 월간 횟수 제한 설정
+MAX_MONTHLY_LIMIT = 30 
 
 # --- [2. 사이드바: 로그인 및 승인 신청 시스템] ---
 with st.sidebar:
@@ -106,9 +106,7 @@ except:
 user_idx = st.session_state.user_db[st.session_state.user_db['email'] == st.session_state.authenticated_user].index[0]
 if st.session_state.user_db.at[user_idx, 'is_admin']:
     with st.expander("👑 관리자 전용: 사용자 승인 및 관리", expanded=False):
-        st.write("현재 등록된 사용자 목록")
         st.dataframe(st.session_state.user_db, use_container_width=True)
-        
         target_email = st.selectbox("승인/해제 대상 선택", st.session_state.user_db['email'])
         c1, c2 = st.columns(2)
         if c1.button("✅ 승인 처리", use_container_width=True):
@@ -119,7 +117,7 @@ if st.session_state.user_db.at[user_idx, 'is_admin']:
             st.session_state.user_db.loc[st.session_state.user_db['email'] == target_email, 'approved'] = False
             st.rerun()
 
-# --- [5. 메인 UI: 분석 및 리포트 완전판 로직] ---
+# --- [5. 메인 UI 및 업종 맞춤형 로직] ---
 st.title("🏛️ 벤처인증 통합 컨설팅 대시보드")
 col1, col2 = st.columns(2)
 
@@ -134,30 +132,28 @@ with col1:
                 pages = convert_from_bytes(uploaded_file.read())
                 if pages: analysis_image = pages[0]
             except Exception:
-                st.error("PDF 변환 오류가 발생했습니다. poppler 설정을 확인하세요.")
+                st.error("PDF 변환 오류 발생")
         else:
             analysis_image = Image.open(uploaded_file)
         
-        st.warning("🔔 **벤처인증 신청을 위해 아래 9가지 서류를 미리 준비해 주세요!**")
-        st.markdown("""
-        * ✅ **사업자등록증** (현재 완료)
-        * 📋 **법인등기부등본** (말소사항 포함)
-        * 📋 **부가가치세표준증명원**
-        * 📋 **재무제표 (최근 3개년치)**
-        * 📋 **고용보험 사업장 취득자 명부**
-        * 📋 **4대보험 가입자 명부**
-        * 📋 **대표자 건강보험자격득실확인서**
-        * 📋 **주주명부** (명판 및 인감 날인)
-        * 📋 **연구개발인정서** (연구소 또는 전담부서)
-        """)
+        st.warning("🔔 **벤처인증 신청 필수 서류 9가지 준비 확인**")
         
         if st.button("AI 기술 주제 추천받기"):
             if st.session_state.user_db.at[user_idx, 'usage_count'] >= MAX_MONTHLY_LIMIT:
                 st.error("이번 달 사용 횟수를 초과했습니다.")
             else:
-                with st.spinner('종목 분석 중...'):
-                    prompt = "사업자등록증의 종목을 분석하여 벤처인증용 혁신 기술 주제 3개를 전문적인 제목으로 제안해줘."
-                    response = model.generate_content([prompt, analysis_image])
+                with st.spinner('종목 분석 및 기술 추천 중...'):
+                    # 🚀 [업종 맞춤형 가이드라인 강화]
+                    recommend_prompt = """
+                    사업자등록증의 종목을 분석하여 벤처인증용 혁신 기술 주제 3개를 제안해줘.
+                    
+                    **[중요 가이드라인]**
+                    1. 모든 추천이 AI, 스마트, 플랫폼 등 IT 기술에만 편중되지 않도록 할 것.
+                    2. 업종이 제조업인 경우: 공정 자동화, 신소재 도입, 정밀 가공 기술, 품질 검사 시스템 등 하드웨어적 혁신을 반드시 포함할 것.
+                    3. 업종이 서비스/유통인 경우: 물류 혁신, 친환경 패키징, 독자적인 서비스 알고리즘 등 실질적 차별화 요소를 제안할 것.
+                    4. 전문적인 기술 명칭과 함께, 왜 이것이 벤처인증(혁신성)에 유리한지 1문장씩 덧붙일 것.
+                    """
+                    response = model.generate_content([recommend_prompt, analysis_image])
                     st.session_state.suggestions = response.text
                     st.session_state.user_db.at[user_idx, 'usage_count'] += 1
                     st.rerun()
@@ -167,7 +163,7 @@ with col1:
 
 with col2:
     st.subheader("2️⃣ 리포트 생성")
-    selected_topic = st.text_input("신청기술명 입력:", placeholder="기술명을 입력하거나 왼쪽에서 복사하세요.")
+    selected_topic = st.text_input("신청기술명 입력:", placeholder="기술명을 입력하세요.")
     
     if st.button("마스터 리포트 생성 🚀", type="primary"):
         if st.session_state.user_db.at[user_idx, 'usage_count'] >= MAX_MONTHLY_LIMIT:
@@ -175,26 +171,24 @@ with col2:
         elif not selected_topic:
             st.warning("기술명을 입력해 주세요.")
         else:
-            with st.spinner('베테랑 컨설턴트의 시각으로 11개 항목 리포트를 생성 중입니다...'):
-                # 🚀 11개 항목 및 V자 양식 가이드라인 (누락 없이 전체 포함)
+            with st.spinner('베테랑 컨설턴트의 시각으로 상세 리포트를 생성 중입니다...'):
                 form_prompt = f"""
                 당신은 20년 경력의 대한민국 최고의 벤처인증 전문 컨설턴트입니다. 
-                신청기술 [{selected_topic}]에 대해 다음 11개 항목을 각각 전문적인 문체로 상세히 작성하세요. 
+                신청기술 [{selected_topic}]에 대해 다음 11개 항목을 각각 상세히 작성하세요. 
                 각 항목은 공백 포함 700자 내외의 풍부한 분량이어야 합니다.
-                각 항목의 구분은 반드시 '### [항목명]' 형식을 유지하세요.
 
-                특히 [1. 신청기술 요약 및 표준 양식]은 반드시 아래 형식을 엄격히 준수하여 출력하세요:
+                특히 [1. 신청기술 요약 및 표준 양식]은 반드시 아래 형식을 엄격히 준수하세요:
 
                 신청기술(제품/서비스)명: [{selected_topic}]
                 신청기술(제품/서비스)요약: [기술의 핵심 정의와 특징 요약]
                 (벤처확인에 신청하고자 하는 기술(제품/서비스)에 대해 기술명과 간략한 소개를 작성해주시면 됩니다)
-                V 기존 시장에 [문제점/불편사항] 니즈(문제)가 있는데, [기존 방식 한계] 이유로 사람들이 여전히 필요로 하고(불편을 겪고) 있음
-                V 당사에서 [당사 해결 기술 방식]으로 해결책을 찾았으며, 이는 기존 시장의 기술과 비교하여 [차별화 강점 3가지]의 차이를 보유하고 있음
-                V 현재 당사에서 보유 또는 개발 중인 기술명은 [{selected_topic}]으로써, 전체 시장은 국내 기준 약 [금액] 규모이며 연평균 [성장률]%의 성장을 기대할 수 있음
-                V 당사 기술은 [핵심 원천 기술]에 기반하여 [기술적 특성 3가지] 특징을 갖고 있으며 혁신적인 해결책으로, 잠재고객들의 만족도가 훨씬 높을 수 있음
-                V 기술에 대한 지식재산권을 출원 준비 중이며 [인원]명의 연구개발 조직을 보유하는 등 지속 발전이 가능한 기술적 역량을 보유하고 있음
-                V 시장 진입을 위해 마케팅 활동을 진행 중으로 현재 [금액] 정도의 시장을 확보하고 있으며, 향후 3년간 유통망 강화 등의 마케팅 계획을 수립함
-                V 이러한 성과가 가능한 이유는 당사에 독보적인 노하우와 생산자동화 역량이 있기 때문이며 향후 5년간 국내 시장 점유율 [목표]% 이상 및 매출 성장을 해낼 것임
+                V 기존 시장에 [문제점] 니즈(문제)가 있는데, [한계점] 이유로 사람들이 여전히 필요로 하고 있음
+                V 당사에서 [해결방식]으로 해결책을 찾았으며, 기존 시장 기술 대비 [차별점 3가지] 보유
+                V 현재 기술명은 [{selected_topic}]이며, 시장 규모는 [금액], 연평균 [성장률]% 성장이 기대됨
+                V 핵심 기술력 기반 [특징 3가지]를 가지며, 잠재고객 만족도가 훨씬 높을 수 있음
+                V 지식재산권 출원 준비 및 연구개발 조직 보유로 지속 발전 역량 확보
+                V 마케팅 활동 진행으로 현재 [규모] 시장 확보, 향후 3년 유통망 강화 계획 수립
+                V 독보적인 노하우와 역량으로 향후 5년 점유율 [목표]% 이상 달성 및 매출 성장 기대
 
                 ### [1. 신청기술 요약 및 표준 양식]
                 ### [2. 개발배경 및 원인분석]
@@ -217,7 +211,7 @@ with col2:
                     st.session_state.user_db.at[user_idx, 'usage_count'] += 1
                     st.rerun()
                 except Exception as e:
-                    st.error(f"리포트 생성 오류: {e}")
+                    st.error(f"오류: {e}")
 
 # --- [6. 결과 출력] ---
 st.divider()
