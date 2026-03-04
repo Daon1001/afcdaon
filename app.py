@@ -12,10 +12,10 @@ try:
 except ImportError:
     pass
 
-# --- [0. 페이지 설정 및 디자인 강제 적용 CSS] ---
+# --- [0. 페이지 설정 및 디자인 완전 강제 적용 CSS] ---
 st.set_page_config(page_title="벤처인증 AI 마스터 컨설턴트", layout="wide")
 
-# 디자인이 바뀌지 않을 때를 대비해 스타일 태그에 !important를 추가했습니다.
+# 디자인이 절대 씹히지 않도록 초강력 CSS 적용
 custom_css = """
 <style>
     /* 1. 배경 그라데이션 강제 적용 */
@@ -23,41 +23,51 @@ custom_css = """
         background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%) !important;
     }
     
-    /* 2. 중앙 로그인 박스 레이아웃 최적화 */
+    /* 2. 중앙 로그인 박스 레이아웃 (높이와 간격 조정) */
     .login-container {
         display: flex !important;
-        flex-direction: column !important;
-        align-items: center !important;
         justify-content: center !important;
-        padding: 50px 20px !important;
-    }
-    .login-box {
-        background-color: white !important;
-        padding: 40px !important;
-        border-radius: 20px !important;
-        box-shadow: 0 15px 35px rgba(0, 0, 0, 0.2) !important;
-        text-align: center !important;
-        max-width: 480px !important;
-        width: 100% !important;
-        border-top: 8px solid #0b1f52 !important;
+        align-items: center !important;
+        min-height: 80vh !important;
     }
     
-    /* 3. 로고 이미지 잘림 방지 및 크기 조절 */
-    .stImage > img {
-        object-fit: contain !important;
-        max-height: 250px !important;
-        border-radius: 10px !important;
+    .login-box {
+        background-color: white !important;
+        padding: 30px !important;
+        border-radius: 20px !important;
+        box-shadow: 0 20px 40px rgba(0, 0, 0, 0.2) !important;
+        text-align: center !important;
+        max-width: 500px !important;
+        width: 100% !important;
+        border-top: 10px solid #0b1f52 !important;
     }
 
-    /* 4. 헤더 및 기타 스타일 */
+    /* 3. 이미지(확인서)를 로고처럼 꽉 채우기 - 잘림 및 작게 보임 방지 */
+    [data-testid="stImage"] > img {
+        width: 100% !important;
+        height: auto !important;
+        max-height: 350px !important;
+        object-fit: cover !important; /* 이미지 비율을 맞추며 꽉 채움 */
+        border-radius: 12px !important;
+        margin-bottom: 20px !important;
+        border: 1px solid #eee !important;
+    }
+
+    .login-title {
+        color: #0b1f52 !important;
+        font-weight: 800 !important;
+        font-size: 28px !important;
+        margin-top: 10px !important;
+    }
+
+    /* 4. 대시보드 내부 프리미엄 헤더 */
     .premium-header {
         background: linear-gradient(135deg, #0b1f52 0%, #1a3673 100%) !important;
         color: white !important;
-        padding: 2.5rem !important;
+        padding: 2rem !important;
         border-radius: 15px !important;
         border-bottom: 5px solid #d4af37 !important;
         text-align: center !important;
-        margin-bottom: 2rem !important;
     }
 </style>
 """
@@ -90,47 +100,49 @@ MAX_MONTHLY_LIMIT = 30
 
 # --- [2. 중앙 집중형 로그인 화면 구현] ---
 if st.session_state.authenticated_user is None:
-    # 빈 공간을 활용해 중앙 정렬 강제
-    st.write("##")
-    st.write("##")
-    col1, col2, col3 = st.columns([1, 1.5, 1])
+    # 화면 정중앙 배치를 위해 컬럼 비율 조정
+    _, col_mid, _ = st.columns([0.5, 1, 0.5])
     
-    with col2:
-        st.markdown('<div class="login-container">', unsafe_allow_html=True)
-        with st.container():
-            st.markdown('<div class="login-box">', unsafe_allow_html=True)
-            
-            # 🚀 확인서 이미지 (파일명: venture_cert.png 가 폴더에 있어야 함)
-            try:
-                logo = Image.open("venture_cert.png")
-                st.image(logo, use_container_width=True)
-            except:
-                st.markdown("<h2 style='color:#0b1f52;'>🏛️ 중소기업경영지원단</h2>", unsafe_allow_html=True)
-            
-            st.markdown("<p style='color:#666;'>벤처인증 AI 마스터 컨설턴트 전용 로그인</p>", unsafe_allow_html=True)
-            
-            login_email = st.text_input("이메일 입력", placeholder="example@gmail.com", label_visibility="collapsed").strip().lower()
-            
-            # 버튼 레이아웃
-            b_col1, b_col2 = st.columns(2)
-            if b_col1.button("로그인", type="primary", use_container_width=True):
-                user_row = user_db[user_db['email'] == login_email]
-                if not user_row.empty and user_row.iloc[0]['approved']:
-                    st.session_state.authenticated_user = login_email
-                    st.rerun()
-                else: st.error("❌ 미등록 계정 또는 승인 대기")
+    with col_mid:
+        st.write("##") # 상단 여백
+        # HTML div로 박스 시작
+        st.markdown('<div class="login-box">', unsafe_allow_html=True)
+        
+        # 🚀 확인서 이미지 (파일명: venture_cert.png 가 폴더에 있어야 함)
+        try:
+            logo = Image.open("venture_cert.png")
+            st.image(logo)
+        except:
+            st.markdown("<h2 style='color:#0b1f52;'>🏛️ 중소기업경영지원단</h2>", unsafe_allow_html=True)
+        
+        st.markdown('<div class="login-title">중소기업경영지원단</div>', unsafe_allow_html=True)
+        st.markdown("<p style='color:#666; margin-bottom: 25px;'>벤처인증 AI 마스터 컨설턴트 로그인</p>", unsafe_allow_html=True)
+        
+        login_email = st.text_input("이메일 입력", placeholder="example@gmail.com", label_visibility="collapsed").strip().lower()
+        
+        st.write("")
+        b_col1, b_col2 = st.columns(2)
+        if b_col1.button("로그인", type="primary", use_container_width=True):
+            user_row = user_db[user_db['email'] == login_email]
+            if not user_row.empty and user_row.iloc[0]['approved']:
+                st.session_state.authenticated_user = login_email
+                st.rerun()
+            else: st.error("❌ 미등록 계정 또는 승인 대기")
                 
-            if b_col2.button("승인 신청", use_container_width=True):
-                if login_email and user_db[user_db['email'] == login_email].empty:
-                    new_user = pd.DataFrame([{"email": login_email, "approved": False, "is_admin": False, "created_at": datetime.now().strftime("%Y-%m-%d"), "usage_count": 0, "last_month": date.today().month}])
-                    user_db = pd.concat([user_db, new_user], ignore_index=True); save_db(user_db)
-                    st.success("📩 신청 완료!")
-                else: st.warning("이미 신청됨")
-            st.markdown('</div>', unsafe_allow_html=True)
+        if b_col2.button("승인 신청", use_container_width=True):
+            if login_email and user_db[user_db['email'] == login_email].empty:
+                new_user = pd.DataFrame([{"email": login_email, "approved": False, "is_admin": False, "created_at": datetime.now().strftime("%Y-%m-%d"), "usage_count": 0, "last_month": date.today().month}])
+                user_db = pd.concat([user_db, new_user], ignore_index=True); save_db(user_db)
+                st.success("📩 신청 완료!")
+            else: st.warning("이미 신청됨")
+            
         st.markdown('</div>', unsafe_allow_html=True)
     st.stop()
 
-# --- [3. 메인 대시보드 로직] ---
+# =====================================================================
+# 로그인 성공 후 메인 페이지
+# =====================================================================
+
 with st.sidebar:
     st.success(f"👤 접속: {st.session_state.authenticated_user}")
     if st.button("로그아웃", use_container_width=True):
@@ -147,7 +159,6 @@ try:
 except:
     st.error("API 키 설정 오류"); st.stop()
 
-# --- [4. 대시보드 상단 비주얼] ---
 st.markdown(f"""
     <div class="premium-header">
         <h1>🏛️ 벤처인증 통합 컨설팅 대시보드</h1>
@@ -161,7 +172,6 @@ if st.button("🔄 새 기업 컨설팅 시작", type="secondary"):
     st.session_state.uploader_key = str(int(st.session_state.uploader_key) + 1)
     st.rerun()
 
-# --- [5. 본문 기능] ---
 col1, col2 = st.columns(2)
 
 with col1:
@@ -175,7 +185,6 @@ with col1:
             try: pages = convert_from_bytes(uploaded_file.read()); analysis_image = pages[0]
             except: st.error("PDF 변환 오류")
         else: analysis_image = Image.open(uploaded_file)
-        st.info("📋 9대 필수 서류 가이드")
         
     user_guide_rec = st.text_area("💡 추천 가이드", placeholder="예: ESG 강조", key=f"gr_{st.session_state.uploader_key}")
     
@@ -200,7 +209,7 @@ with col2:
         else:
             with st.spinner('리포트 생성 중...'):
                 form_prompt = f"""
-                당신은 20년 경력의 벤처인증 컨설턴트입니다. [{selected_topic}]에 대해 11개 항목 리포트를 작성하세요.
+                당신은 20년 경력의 벤처컨설턴트입니다. [{selected_topic}]에 대해 11개 항목 리포트를 작성하세요.
                 V자 요약 양식 필수 포함. 지어낸 숫자 금지. {user_guide_rep}
                 ### [1. 신청기술 요약 및 표준 양식]
                 ### [2. 개발배경 및 원인분석]
@@ -219,7 +228,6 @@ with col2:
                 st.session_state.report_sections = response.text.split('### ')
                 user_db.at[idx, 'usage_count'] += 1; save_db(user_db); st.rerun()
 
-# --- [6. 결과 출력] ---
 if 'report_sections' in st.session_state:
     st.divider()
     full_report = "\n\n".join(st.session_state.report_sections)
