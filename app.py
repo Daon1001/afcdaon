@@ -17,9 +17,12 @@ st.set_page_config(page_title="벤처인증 AI 마스터 컨설턴트", layout="
 
 custom_css = """
 <style>
+    /* 배경 그라데이션 */
     .stApp {
         background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%) !important;
     }
+    
+    /* 중앙 로그인 박스 레이아웃 */
     .login-container {
         display: flex !important;
         justify-content: center !important;
@@ -27,39 +30,54 @@ custom_css = """
         padding-top: 30px !important;
         min-height: 100vh !important;
     }
+    
     .login-box {
         background-color: white !important;
         padding: 25px !important;
-        border-radius: 20px !important;
+        border-radius: 15px !important;
         box-shadow: 0 15px 35px rgba(0, 0, 0, 0.2) !important;
         text-align: center !important;
         max-width: 480px !important;
         width: 100% !important;
-        border-top: 10px solid #0b1f52 !important;
+        border-top: 8px solid #0b1f52 !important;
     }
+
+    /* 이미지(확인서) 최적화 */
     [data-testid="stImage"] > img {
         width: 100% !important;
         height: auto !important;
-        max-height: 300px !important;
+        max-height: 280px !important;
         object-fit: contain !important;
-        border-radius: 10px !important;
-        margin-bottom: 15px !important;
+        border-radius: 8px !important;
+        margin-bottom: 10px !important;
     }
+
     .login-title {
         color: #0b1f52 !important;
         font-weight: 800 !important;
-        font-size: 26px !important;
+        font-size: 24px !important;
         margin-top: 5px !important;
     }
+
+    /* 대시보드 내부 프리미엄 헤더 */
     .premium-header {
         background: linear-gradient(135deg, #0b1f52 0%, #1a3673 100%) !important;
         color: white !important;
         padding: 1.5rem !important;
         border-radius: 12px !important;
-        border-bottom: 5px solid #d4af37 !important;
+        border-bottom: 4px solid #d4af37 !important;
         text-align: center;
-        margin-bottom: 2rem;
+        margin-bottom: 1.5rem;
     }
+    
+    .metric-box {
+        background-color: rgba(255, 255, 255, 0.9);
+        border-left: 5px solid #0b1f52;
+        padding: 15px 20px;
+        border-radius: 8px;
+        margin-bottom: 20px;
+    }
+    
     .report-card {
         background-color: white !important;
         padding: 20px !important;
@@ -84,25 +102,28 @@ def load_db():
         ])
         initial_data.to_csv(DB_FILE, index=False)
         return initial_data
+    
     df = pd.read_csv(DB_FILE)
+    # 구형 DB 자동 복구
     for col in ['usage_count', 'last_month', 'created_at', 'approved', 'is_admin']:
-        if col not in df.columns: 
+        if col not in df.columns:
             df[col] = 0 if 'count' in col else (date.today().month if 'month' in col else False)
     return df
 
-def save_db(df): 
+def save_db(df):
     df.to_csv(DB_FILE, index=False)
 
 user_db = load_db()
 
-# --- [1. 세션 및 사용량 관리] ---
-if 'authenticated_user' not in st.session_state: 
+# --- [1. 시스템 세션 상태 관리] ---
+if 'authenticated_user' not in st.session_state:
     st.session_state.authenticated_user = None
-if 'uploader_key' not in st.session_state: 
+if 'uploader_key' not in st.session_state:
     st.session_state.uploader_key = "1"
+
 MAX_MONTHLY_LIMIT = 30 
 
-# --- [2. 중앙 집중형 로그인 화면] ---
+# --- [2. 중앙 집중형 로그인 화면 (네이버/STOVE 스타일)] ---
 if st.session_state.authenticated_user is None:
     _, col_mid, _ = st.columns([0.5, 1, 0.5])
     with col_mid:
@@ -121,16 +142,16 @@ if st.session_state.authenticated_user is None:
             if not user_row.empty and user_row.iloc[0]['approved']:
                 st.session_state.authenticated_user = login_email
                 st.rerun()
-            else: st.error("❌ 미등록 계정 또는 승인 대기 중입니다.")
+            else: st.error("❌ 미등록 계정 또는 승인 대기")
         if b2.button("승인 신청", use_container_width=True):
             if login_email and user_db[user_db['email'] == login_email].empty:
                 new_user = pd.DataFrame([{"email": login_email, "approved": False, "is_admin": False, "created_at": datetime.now().strftime("%Y-%m-%d"), "usage_count": 0, "last_month": date.today().month}])
                 user_db = pd.concat([user_db, new_user], ignore_index=True); save_db(user_db)
-                st.success("📩 승인 신청이 완료되었습니다!")
+                st.success("📩 신청 완료!")
         st.markdown('</div></div>', unsafe_allow_html=True)
     st.stop()
 
-# --- [3. 메인 대시보드 및 AI 엔진 최적화] ---
+# --- [3. 메인 대시보드 및 동적 AI 엔진 연결] ---
 with st.sidebar:
     st.success(f"👤 접속: {st.session_state.authenticated_user}")
     if st.button("로그아웃", use_container_width=True):
@@ -144,23 +165,29 @@ try:
     API_KEY = st.secrets["gemini_api_key"]
     genai.configure(api_key=API_KEY)
     
-    # 가용한 모델 리스트 확인 후 안정적인 모델 자동 선택
-    available_models = [m.name for m in genai.list_models() if 'generateContent' in m.supported_generation_methods]
-    target_model = "models/gemini-1.5-flash" # 기본 설정
+    # 접근 가능한 모든 모델 리스트를 실시간으로 확인
+    model_list = [m.name for m in genai.list_models() if 'generateContent' in m.supported_generation_methods]
     
-    # 우선순위 모델 검색
-    for preferred in ["models/gemini-1.5-flash", "models/gemini-1.5-pro", "models/gemini-pro"]:
-        if preferred in available_models:
-            target_model = preferred
+    # 우선순위에 따른 자동 모델 선택 (models/ 접두사 중복 방지)
+    selected_model_path = ""
+    for preferred in ["gemini-1.5-flash", "gemini-1.5-pro", "gemini-pro"]:
+        matching = [m for m in model_list if preferred in m]
+        if matching:
+            selected_model_path = matching[0]
             break
-    model = genai.GenerativeModel(target_model)
+            
+    if not selected_model_path and model_list:
+        selected_model_path = model_list[0]
+        
+    model = genai.GenerativeModel(selected_model_path)
+    st.sidebar.caption(f"🤖 가동 엔진: {selected_model_path.split('/')[-1]}")
 except Exception as e:
     st.error(f"⚠️ AI 엔진 연결 실패: {e}"); st.stop()
 
-st.markdown(f"""
+st.markdown("""
     <div class="premium-header">
         <h1>🏛️ 벤처인증 통합 컨설팅 대시보드</h1>
-        <p><strong>중소기업경영지원단</strong> 전문가 전용 AI 마스터 (혁신성장유형 특화)</p>
+        <p><strong>중소기업경영지원단</strong> 전문가 전용 AI 마스터 시스템</p>
     </div>
 """, unsafe_allow_html=True)
 
@@ -170,7 +197,7 @@ if st.button("🔄 새 기업 컨설팅 시작", type="secondary"):
     st.session_state.uploader_key = str(int(st.session_state.uploader_key) + 1)
     st.rerun()
 
-# --- [4. 분석 및 리포트 섹션] ---
+# --- [4. 기능 영역] ---
 col1, col2 = st.columns(2)
 
 with col1:
@@ -181,20 +208,19 @@ with col1:
     analysis_image = None
     if uploaded_file:
         if uploaded_file.type == "application/pdf":
-            try:
-                pages = convert_from_bytes(uploaded_file.read())
-                if pages: analysis_image = pages[0]
+            try: pages = convert_from_bytes(uploaded_file.read()); analysis_image = pages[0]
             except: st.error("PDF 변환 오류")
         else: analysis_image = Image.open(uploaded_file)
         
-    user_guide_rec = st.text_area("💡 추천 가이드라인", placeholder="예: 특정 기술 강조 등", key=f"gr_{st.session_state.uploader_key}")
+    user_guide_rec = st.text_area("💡 추천 가이드", placeholder="예: ESG 강조", key=f"gr_{st.session_state.uploader_key}")
     
     if st.button("AI 기술 주제 추천 ✨"):
-        if user_db.at[idx, 'usage_count'] >= MAX_MONTHLY_LIMIT: st.error("사용 한도 초과")
+        if user_db.at[idx, 'usage_count'] >= MAX_MONTHLY_LIMIT: st.error("한도 초과")
         else:
-            with st.spinner('AI가 기술을 분석 중입니다...'):
-                prompt = f"[{biz_type}] 분야 벤처인증 혁신 기술 주제 3개를 추천해줘. {user_guide_rec}"
+            with st.spinner('분석 중...'):
+                prompt = f"[{biz_type}] 벤처 기술 주제 3개 추천. {user_guide_rec}"
                 inputs = [prompt, analysis_image] if analysis_image else [prompt]
+                # 🚀 line 198 (또는 200번대) 에러 해결을 위해 명시적 호출
                 response = model.generate_content(inputs)
                 st.session_state.suggestions = response.text
                 user_db.at[idx, 'usage_count'] += 1; save_db(user_db); st.rerun()
@@ -205,12 +231,13 @@ with col1:
 with col2:
     st.subheader("2️⃣ 마스터 리포트 생성")
     selected_topic = st.text_input("확정 기술명", placeholder="기술명을 입력하세요.", key=f"topic_{st.session_state.uploader_key}")
-    user_guide_rep = st.text_area("💡 리포트 지시사항", placeholder="시장 수치 등 추가 지시", key=f"gp_{st.session_state.uploader_key}")
+    user_guide_rep = st.text_area("💡 리포트 지시사항", placeholder="시장 숫자 등", key=f"gp_{st.session_state.uploader_key}")
     
     if st.button("마스터 리포트 생성 🚀", type="primary"):
-        if not selected_topic: st.warning("기술명을 먼저 입력해 주세요.")
+        if not selected_topic: st.warning("기술명을 입력하세요.")
         else:
-            with st.spinner('20년 경력 컨설턴트 모드로 리포트를 작성 중입니다...'):
+            with st.spinner('리포트 생성 중...'):
+                # 🚀 11개 항목 전체 프롬프트 (요약 절대 금지)
                 form_prompt = f"""
                 당신은 대한민국 최고의 벤처인증 전문 컨설턴트입니다. 신청기술 [{selected_topic}]에 대해 11개 항목 리포트를 작성하세요.
                 시장 데이터는 실제 기반 숫자를 사용하고 지어내지 마세요. V자 요약 양식 필수 포함. {user_guide_rep}
@@ -235,10 +262,9 @@ with col2:
 if 'report_sections' in st.session_state:
     st.divider()
     full_report = "\n\n".join(st.session_state.report_sections)
-    st.download_button("💾 전체 리포트 다운로드 (.txt)", full_report, file_name=f"벤처마스터리포트_{selected_topic}.txt")
+    st.download_button("💾 전체 리포트 다운로드", full_report, file_name=f"벤처리포트_{selected_topic}.txt")
     for section in st.session_state.report_sections:
         if section.strip():
-            # [수정 완료] 인덱스 에러 방지용 안전한 파싱
             lines = section.split('\n', 1)
             title = lines[0].strip('[] ')
             body = lines[1] if len(lines) > 1 else ""
