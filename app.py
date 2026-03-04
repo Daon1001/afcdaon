@@ -12,9 +12,65 @@ try:
 except ImportError:
     pass
 
-# --- [0. 페이지 설정 및 CSV DB 설정 (자동 복구 로직 포함)] ---
+# --- [0. 페이지 설정 및 프리미엄 CSS 디자인 적용] ---
 st.set_page_config(page_title="벤처인증 AI 마스터 컨설턴트", layout="wide")
 
+# 고급스러운 UI를 위한 커스텀 CSS (벤처확인서 감성: 남색+금색 포인트)
+custom_css = """
+<style>
+    /* 메인 그라데이션 헤더 */
+    .premium-header {
+        background: linear-gradient(135deg, #0b1f52 0%, #1a3673 100%);
+        color: white;
+        padding: 2.5rem;
+        border-radius: 12px;
+        border-bottom: 5px solid #d4af37;
+        text-align: center;
+        margin-bottom: 2rem;
+        box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+    }
+    .premium-header h1 {
+        color: white;
+        font-weight: 800;
+        margin-bottom: 0.5rem;
+    }
+    .premium-header p {
+        color: #e0e0e0;
+        font-size: 1.1rem;
+        margin: 0;
+    }
+    
+    /* 전문가 뱃지/메트릭스 박스 */
+    .metric-box {
+        background-color: #f8f9fa;
+        border-left: 5px solid #0b1f52;
+        padding: 15px 20px;
+        border-radius: 8px;
+        margin-bottom: 20px;
+        box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+    }
+    
+    /* 입체적인 버튼 디자인 */
+    .stButton>button {
+        border-radius: 8px;
+        font-weight: bold;
+        transition: all 0.3s ease;
+        box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+    }
+    .stButton>button:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 10px rgba(0,0,0,0.15);
+    }
+    
+    /* 기본 배경 및 폰트 다듬기 */
+    .stApp {
+        background-color: #fafbfc;
+    }
+</style>
+"""
+st.markdown(custom_css, unsafe_allow_html=True)
+
+# --- CSV DB 설정 (자동 복구 로직 포함) ---
 DB_FILE = "users.csv"
 
 def load_db():
@@ -61,7 +117,7 @@ MAX_MONTHLY_LIMIT = 30
 
 # --- [2. 사이드바: 로그인 및 승인 신청 시스템] ---
 with st.sidebar:
-    st.title("🔐 접근 제어")
+    st.title("🔐 컨설턴트 전용 로그인")
     
     if st.session_state.authenticated_user is None:
         login_email = st.text_input("이메일 입력", placeholder="example@gmail.com").strip().lower()
@@ -74,9 +130,9 @@ with st.sidebar:
                     st.session_state.authenticated_user = login_email
                     st.rerun()
                 else:
-                    st.error("❌ 승인 대기 중입니다. 관리자 승인을 기다려주세요.")
+                    st.error("❌ 승인 대기 중입니다.")
             else:
-                st.warning("⚠️ 등록되지 않은 이메일입니다. [승인 신청]을 먼저 하세요.")
+                st.warning("⚠️ 등록되지 않은 이메일입니다.")
 
         if col_req.button("승인 신청", use_container_width=True):
             if not login_email:
@@ -94,11 +150,11 @@ with st.sidebar:
                     }])
                     user_db = pd.concat([user_db, new_user], ignore_index=True)
                     save_db(user_db)
-                    st.info("📩 승인 신청 완료! 관리자에게 승인을 요청하세요.")
+                    st.info("📩 승인 신청 완료!")
                 else:
                     st.warning("이미 등록(신청)된 이메일입니다.")
     else:
-        st.success(f"👤 로그인 중: {st.session_state.authenticated_user}")
+        st.success(f"👤 접속 중: {st.session_state.authenticated_user}")
         if st.button("로그아웃", use_container_width=True):
             st.session_state.authenticated_user = None
             st.rerun()
@@ -116,13 +172,18 @@ with st.sidebar:
             
         user_usage = user_db.at[idx, 'usage_count']
         remaining = MAX_MONTHLY_LIMIT - user_usage
-        st.caption("🛡️ 개인별 월간 사용량")
-        st.write(f"나의 사용량: **{user_usage} / {MAX_MONTHLY_LIMIT}**")
+        st.caption("🛡️ 이번 달 사용 현황")
+        st.write(f"사용량: **{user_usage} / {MAX_MONTHLY_LIMIT} 회**")
         st.progress(min(user_usage / MAX_MONTHLY_LIMIT, 1.0))
 
 # --- [3. 로그인 체크 및 AI 모델 매칭 로직] ---
 if st.session_state.authenticated_user is None:
-    st.title("🏛️ 벤처인증 통합 컨설팅 대시보드")
+    st.markdown("""
+        <div class="premium-header">
+            <h1>🏛️ 벤처인증 통합 컨설팅 대시보드</h1>
+            <p>20년 경력의 노하우와 AI 기술의 완벽한 결합 | 혁신성장유형 마스터</p>
+        </div>
+    """, unsafe_allow_html=True)
     st.info("💡 사이드바에서 이메일 로그인 후 이용 가능합니다.")
     st.stop()
 
@@ -145,7 +206,6 @@ try:
         target_model_name = available_models[0]
         
     model = genai.GenerativeModel(target_model_name)
-    st.sidebar.success(f"✅ 가동 중인 AI 엔진: **{target_model_name}**")
 except Exception as e:
     st.error(f"⚠️ API 연결 오류: {e}")
     st.stop()
@@ -167,16 +227,27 @@ if user_db.at[user_idx, 'is_admin']:
             save_db(user_db)
             st.rerun()
 
-# --- [5. 메인 UI (타이틀 및 초기화 버튼)] ---
-col_title, col_reset = st.columns([8, 2])
-with col_title:
-    st.title("🏛️ 벤처인증 통합 컨설팅 대시보드")
+# --- [5. 메인 UI (프리미엄 헤더 및 초기화 버튼)] ---
+st.markdown("""
+    <div class="premium-header">
+        <h1>🏛️ 벤처인증 통합 컨설팅 대시보드</h1>
+        <p>20년 경력의 노하우와 AI 기술의 완벽한 결합 | <strong>혁신성장유형 마스터</strong></p>
+    </div>
+""", unsafe_allow_html=True)
+
+col_metric, col_reset = st.columns([8, 2])
+with col_metric:
+    st.markdown("""
+        <div class="metric-box">
+            💡 <strong>스마트 가이드:</strong> 업종별 필수 서류를 자동으로 분류하고, AI가 11개 항목의 전문 리포트를 즉시 생성합니다.
+        </div>
+    """, unsafe_allow_html=True)
 with col_reset:
-    st.write("") 
-    if st.button("🔄 새 기업 컨설팅 시작 (초기화)", use_container_width=True, type="secondary"):
+    if st.button("🔄 새 기업 컨설팅 시작", use_container_width=True):
         for key in ['suggestions', 'report_sections']:
             if key in st.session_state:
                 del st.session_state[key]
+        # 키값을 올려 모든 입력창과 파일업로더를 완전 리셋
         st.session_state.uploader_key = str(int(st.session_state.uploader_key) + 1)
         st.rerun()
 
@@ -184,7 +255,7 @@ with col_reset:
 col1, col2 = st.columns(2)
 
 with col1:
-    st.subheader("1️⃣ 분석 및 서류 가이드")
+    st.subheader("1️⃣ 기업 분석 및 서류 가이드")
     
     biz_type = st.radio(
         "🏢 컨설팅 대상 기업의 업종/업력을 선택하세요",
@@ -204,54 +275,54 @@ with col1:
         else:
             analysis_image = Image.open(uploaded_file)
         
-        st.warning(f"🔔 **[{biz_type}] 벤처인증 신청 필수 서류 확인**")
+        st.info(f"📋 **[{biz_type}] 필수 증빙 서류 목록**")
         
         if biz_type == "일반 기업 (제조/서비스 등)":
             st.markdown("""
-            1. ✅ **사업자등록증명원** (또는 사업자등록증 사본)
-            2. 📋 **법인등기부등본** (말소사항 포함, 최근 3개월 이내 발급분)
-            3. 📋 **재무제표** (최근 3개년치 - 재무상태표, 손익계산서 등 포함)
+            1. ✅ **사업자등록증명원** (또는 사본)
+            2. 📋 **법인등기부등본** (말소사항 포함)
+            3. 📋 **재무제표** (최근 3개년치)
             4. 📋 **부가가치세과세표준증명원** (최근 3개년치)
-            5. 📋 **고용보험 사업장 취득자 명부** (전체 인원 확인용)
+            5. 📋 **고용보험 사업장 취득자 명부**
             6. 📋 **4대 사회보험 사업장 가입자 명부**
-            7. 📋 **주주명부** (최근 결산기 기준, 명판 및 인감 날인 필수)
-            8. 📋 **기업부설연구소 인증서** (또는 연구개발전담부서 인정서)
-            9. 📋 **지식재산권 등록증/출원서** (특허, 실용신안 등 기술력 증빙 서류)
+            7. 📋 **주주명부** (명판 및 인감 날인 필수)
+            8. 📋 **기업부설연구소/전담부서 인정서**
+            9. 📋 **지식재산권 등록증/출원서**
             """)
         elif biz_type == "IT / 소프트웨어":
             st.markdown("""
-            1. ✅ **사업자등록증명원** (또는 사업자등록증 사본)
-            2. 📋 **법인등기부등본** (말소사항 포함)
-            3. 📋 **재무제표 & 부가세증명원** (최근 3개년치)
-            4. 📋 **고용/4대보험 가입자 명부** (핵심 개발 인력 비율 확인 필수)
-            5. 📋 **주주명부** (최근 결산기 기준, 명판 및 인감 날인 필수)
+            1. ✅ **사업자등록증명원**
+            2. 📋 **법인등기부등본**
+            3. 📋 **재무제표 & 부가세증명원**
+            4. 📋 **고용/4대보험 가입자 명부** (개발 인력 확인)
+            5. 📋 **주주명부**
             6. 📋 **기업부설연구소/전담부서 인정서**
-            7. 📋 **프로그램 등록증 및 지식재산권** (SW 저작권 등 필수 증빙)
-            8. 📋 **서비스/앱 소개서 및 UI/UX 화면 캡처본** (실적 및 기술성 증빙 보조자료)
-            9. 📋 **서버 및 도메인 등록 관련 증빙** (필요시)
+            7. 📋 **프로그램 등록증 및 지식재산권**
+            8. 📋 **서비스/앱 소개서 및 UI/UX 화면**
+            9. 📋 **서버 및 도메인 등록 관련 증빙**
             """)
         else:
             st.markdown("""
-            1. ✅ **사업자등록증명원** (창업 기업) / 예비창업자는 대표자 신분증 사본
-            2. 📋 **법인등기부등본** (법인인 경우 설립일 기준)
-            3. 📋 **재무제표 및 부가세증명원** (설립일~최근 결산일, 재무 실적 없으면 추정재무제표)
-            4. 📋 **고용/4대보험 가입자 명부** (현재 채용 인원 기준)
-            5. 📋 **주주명부** (현재 기준 명판 및 인감 날인)
-            6. 📋 **사업계획서** (초기 창업자용 상세 비즈니스 모델 및 기술 계획서 필수)
-            7. 📋 **지식재산권 출원서** (등록 전이라도 기술 준비 상황을 증빙할 출원번호 통지서)
-            8. 📋 **대표자 및 핵심인력 이력서/경력증명서** (인적 역량 평가용)
+            1. ✅ **사업자등록증명원** (예비창업자는 신분증 사본)
+            2. 📋 **법인등기부등본**
+            3. 📋 **재무제표 및 부가세증명원** (추정재무제표 가능)
+            4. 📋 **고용/4대보험 가입자 명부**
+            5. 📋 **주주명부**
+            6. 📋 **사업계획서** (상세 비즈니스 모델 필수)
+            7. 📋 **지식재산권 출원서** (출원번호 통지서 가능)
+            8. 📋 **대표자 및 핵심인력 이력서/경력증명서**
             9. 📋 **연구소/전담부서 인정서** (설립된 경우)
             """)
         
         user_guide_rec = st.text_area(
-            "💡 추천 추가 가이드라인 (선택사항)", 
+            "💡 AI 기술 추천 가이드라인 (선택)", 
             placeholder="예: 친환경 패키징 기술 위주로 추천해 주세요.", 
             key=f"guide_rec_{st.session_state.uploader_key}"
         )
         
         suggestion_placeholder = st.empty()
 
-        if st.button("AI 기술 주제 추천받기"):
+        if st.button("AI 기술 주제 추천받기 ✨"):
             if user_db.at[user_idx, 'usage_count'] >= MAX_MONTHLY_LIMIT:
                 st.error("이번 달 사용 횟수를 초과했습니다.")
             else:
@@ -260,10 +331,9 @@ with col1:
                     사업자등록증의 종목을 분석하여 [{biz_type}] 분야의 벤처인증용 혁신 기술 주제 3개를 제안해줘.
                     
                     **[기본 가이드라인]**
-                    1. 모든 추천이 AI, 스마트, 플랫폼 등 특정 기술에만 편중되지 않도록 할 것.
+                    1. 모든 추천이 특정 IT 기술에만 편중되지 않도록 할 것.
                     2. 업종이 제조업인 경우: 공정 자동화, 신소재 도입 등 하드웨어적 혁신 포함.
-                    3. 업종이 서비스/유통/SW인 경우: 물류 혁신, 친환경 패키징 등 실질적 차별화 요소 제안.
-                    4. 전문적인 기술 명칭과 함께, 왜 이것이 벤처인증(혁신성)에 유리한지 1문장씩 덧붙일 것.
+                    3. 전문적인 기술 명칭과 함께, 왜 이것이 벤처인증(혁신성)에 유리한지 1문장씩 덧붙일 것.
                     """
                     
                     if user_guide_rec.strip():
@@ -306,16 +376,16 @@ with col1:
                         st.rerun()
 
 with col2:
-    st.subheader("2️⃣ 리포트 생성")
+    st.subheader("2️⃣ 마스터 리포트 생성")
     selected_topic = st.text_input(
-        "신청기술명 입력:", 
-        placeholder="기술명을 입력하거나 왼쪽에서 복사하세요.",
+        "신청기술명 확정:", 
+        placeholder="추천받은 기술명을 복사하여 붙여넣으세요.",
         key=f"topic_{st.session_state.uploader_key}"
     )
     
     user_guide_rep = st.text_area(
-        "💡 리포트 추가 가이드라인 (선택사항)", 
-        placeholder="예: 6번 경쟁사 분석 항목에 A사와의 차별점을 집중적으로 서술해 주세요. 혹은 시장 규모는 5조 원으로 작성해 주세요.", 
+        "💡 리포트 맞춤형 지시사항 (선택)", 
+        placeholder="예: 6번 경쟁사 분석 항목에 A사와의 차별점을 집중 서술. 시장 규모는 5조 원으로 기입.", 
         key=f"guide_rep_{st.session_state.uploader_key}"
     )
     
@@ -332,9 +402,8 @@ with col2:
                 각 항목은 공백 포함 700자 내외의 풍부한 분량이어야 합니다.
 
                 **[데이터 작성 엄격 가이드]**
-                1. 시장 규모, 연평균 성장률, 기대 매출 등 모든 숫자 데이터는 절대 허구로 지어내지 마세요.
-                2. 신뢰할 수 있는 산업 통계나 공신력 있는 연구 기관의 데이터를 기반으로 현실적이고 보수적인 수치를 작성하세요.
-                3. 최신 정확한 숫자를 모를 경우, 해당 산업의 보편적인 동향을 바탕으로 논리적으로 타당한 추정치만 제시하세요.
+                1. 시장 규모, 연평균 성장률 등 숫자 데이터는 절대 허구로 지어내지 마세요.
+                2. 신뢰할 수 있는 산업 통계를 기반으로 현실적이고 보수적인 수치를 작성하세요.
 
                 특히 [1. 신청기술 요약 및 표준 양식]은 반드시 아래 형식을 엄격히 준수하세요:
 
@@ -380,9 +449,9 @@ with col2:
 # --- [7. 결과 출력] ---
 st.divider()
 if 'report_sections' in st.session_state:
-    st.subheader("📄 벤처인증 마스터 컨설팅 리포트")
+    st.subheader("📄 벤처인증 마스터 컨설팅 리포트 결과")
     full_report = "\n\n".join(st.session_state.report_sections)
-    st.download_button("전체 리포트 다운로드(.txt)", full_report, file_name="venture_master_report.txt")
+    st.download_button("💾 전체 리포트 다운로드 (.txt)", full_report, file_name="venture_master_report.txt")
 
     for section in st.session_state.report_sections:
         if section.strip():
@@ -390,4 +459,4 @@ if 'report_sections' in st.session_state:
             title = lines[0].strip('[] ')
             content = '\n'.join(lines[1:]).strip()
             with st.expander(f"📌 {title}", expanded=False):
-                st.markdown(f"<div style='background-color: #f8f9fa; padding: 25px; border-radius: 12px; line-height: 1.9; border-left: 6px solid #007bff;'>{content.replace('\n', '<br>')}</div>", unsafe_allow_html=True)
+                st.markdown(f"<div style='background-color: white; padding: 25px; border-radius: 8px; line-height: 1.8; border: 1px solid #e0e0e0; border-left: 5px solid #0b1f52;'>{content.replace('\n', '<br>')}</div>", unsafe_allow_html=True)
