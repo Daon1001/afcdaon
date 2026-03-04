@@ -17,12 +17,14 @@ st.set_page_config(page_title="벤처인증 AI 마스터 컨설턴트", layout="
 
 custom_css = """
 <style>
-    /* 🚀 1. Streamlit 기본 상단 여백 및 헤더 완전 제거 (스크롤 문제의 원인 해결) */
+    /* 🚀 1. Streamlit 기본 여백을 극한으로 줄임 */
     .block-container {
-        padding-top: 2rem !important;
+        padding-top: 1rem !important; 
         padding-bottom: 1rem !important;
         margin-top: 0 !important;
     }
+    
+    /* 기본 상단 투명 헤더 영역 완벽 제거 */
     header[data-testid="stHeader"] {
         display: none !important;
     }
@@ -32,32 +34,33 @@ custom_css = """
         background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%) !important;
     }
     
-    /* 3. 중앙 로그인 박스 레이아웃 (최상단 밀착) */
+    /* 🚀 3. 로그인 컨테이너: 높이(height) 제한을 없애고 무조건 위로 붙임 */
     .login-container {
         display: flex !important;
         justify-content: center !important;
-        align-items: flex-start !important;
-        padding-top: 0 !important;
+        align-items: flex-start !important; /* 무조건 최상단 정렬 */
         margin-top: 0 !important;
-        min-height: 80vh !important;
+        padding-top: 0 !important;
     }
     
+    /* 🚀 4. 로그인 박스: 화면 맨 위에서 딱 2vh(약 2%)만 띄움 */
     .login-box {
         background-color: white !important;
         padding: 40px !important;
         border-radius: 20px !important;
-        box-shadow: 0 20px 40px rgba(0, 0, 0, 0.2) !important;
+        box-shadow: 0 15px 35px rgba(0, 0, 0, 0.15) !important;
         text-align: center !important;
-        max-width: 500px !important;
+        max-width: 480px !important;
         width: 100% !important;
-        border-top: 10px solid #0b1f52 !important;
+        border-top: 8px solid #0b1f52 !important;
+        margin-top: 2vh !important; /* 상단 강제 고정의 핵심 */
     }
 
     /* 텍스트 로고 타이틀 디자인 */
     .login-title {
         color: #0b1f52 !important;
         font-weight: 900 !important;
-        font-size: 32px !important;
+        font-size: 30px !important;
         margin-bottom: 5px !important;
         letter-spacing: -1px !important;
     }
@@ -67,7 +70,7 @@ custom_css = """
         background: linear-gradient(135deg, #0b1f52 0%, #1a3673 100%) !important;
         color: white !important;
         padding: 2rem !important;
-        border-radius: 15px !important;
+        border-radius: 12px !important;
         border-bottom: 5px solid #d4af37 !important;
         text-align: center !important;
         margin-bottom: 2rem !important;
@@ -112,8 +115,9 @@ if 'authenticated_user' not in st.session_state: st.session_state.authenticated_
 if 'uploader_key' not in st.session_state: st.session_state.uploader_key = "1"
 MAX_MONTHLY_LIMIT = 30 
 
-# --- [2. 중앙 집중형 로그인 화면 구현 (텍스트 로고 & 스크롤 제거)] ---
+# --- [2. 중앙 집중형 로그인 화면 구현 (최상단 강제 고정)] ---
 if st.session_state.authenticated_user is None:
+    # 컬럼을 나누어 중앙 정렬 유도 (상하 여백 유발 요소 제거)
     _, col_mid, _ = st.columns([0.5, 1, 0.5])
     
     with col_mid:
@@ -121,7 +125,7 @@ if st.session_state.authenticated_user is None:
         
         # 이미지 없이 텍스트로만 깔끔하게 구성
         st.markdown('<div class="login-title">🏛️ 중소기업경영지원단</div>', unsafe_allow_html=True)
-        st.markdown("<p style='color:#666; font-size:1.1rem; margin-bottom: 30px;'>벤처인증 AI 마스터 컨설턴트 로그인</p>", unsafe_allow_html=True)
+        st.markdown("<p style='color:#666; font-size:1.05rem; margin-bottom: 25px;'>벤처인증 AI 마스터 컨설턴트 로그인</p>", unsafe_allow_html=True)
         
         login_email = st.text_input("이메일 입력", placeholder="example@gmail.com", label_visibility="collapsed").strip().lower()
         
