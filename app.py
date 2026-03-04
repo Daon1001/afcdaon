@@ -12,7 +12,7 @@ try:
 except ImportError:
     pass
 
-# --- [0. 페이지 설정 및 CSV DB 설정] ---
+# --- [0. 페이지 설정 및 CSV DB 설정 (자동 복구 로직 포함)] ---
 st.set_page_config(page_title="벤처인증 AI 마스터 컨설턴트", layout="wide")
 
 DB_FILE = "users.csv"
@@ -26,7 +26,22 @@ def load_db():
         ])
         initial_data.to_csv(DB_FILE, index=False)
         return initial_data
-    return pd.read_csv(DB_FILE)
+    
+    df = pd.read_csv(DB_FILE)
+    
+    # 🚀 [DB 자동 복구 로직] 구형 CSV 파일을 읽더라도 에러가 나지 않도록 누락된 열 자동 추가
+    if 'usage_count' not in df.columns:
+        df['usage_count'] = 0
+    if 'last_month' not in df.columns:
+        df['last_month'] = date.today().month
+    if 'created_at' not in df.columns:
+        df['created_at'] = datetime.now().strftime("%Y-%m-%d")
+    if 'approved' not in df.columns:
+        df['approved'] = False
+    if 'is_admin' not in df.columns:
+        df['is_admin'] = False
+        
+    return df
 
 def save_db(df):
     df.to_csv(DB_FILE, index=False)
@@ -139,7 +154,6 @@ except Exception as e:
 user_idx = user_db[user_db['email'] == st.session_state.authenticated_user].index[0]
 if user_db.at[user_idx, 'is_admin']:
     with st.expander("👑 관리자 전용: 사용자 승인 및 관리", expanded=False):
-        # 최신 DB 정보를 보여줍니다. 동료가 신청하면 새로고침 시 여기에 뜹니다.
         st.dataframe(user_db, use_container_width=True)
         target_email = st.selectbox("승인/해제 대상 선택", user_db['email'])
         c1, c2 = st.columns(2)
