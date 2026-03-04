@@ -17,18 +17,29 @@ st.set_page_config(page_title="벤처인증 AI 마스터 컨설턴트", layout="
 
 custom_css = """
 <style>
-    /* 배경 그라데이션 강제 적용 */
+    /* 🚀 1. Streamlit 기본 상단 여백 및 헤더 완전 제거 (스크롤 문제의 원인 해결) */
+    .block-container {
+        padding-top: 2rem !important;
+        padding-bottom: 1rem !important;
+        margin-top: 0 !important;
+    }
+    header[data-testid="stHeader"] {
+        display: none !important;
+    }
+
+    /* 2. 배경 그라데이션 강제 적용 */
     .stApp {
         background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%) !important;
     }
     
-    /* 중앙 로그인 박스 레이아웃 (스크롤 방지를 위해 상단으로 밀착) */
+    /* 3. 중앙 로그인 박스 레이아웃 (최상단 밀착) */
     .login-container {
         display: flex !important;
         justify-content: center !important;
-        align-items: flex-start !important; /* 상단 정렬로 변경 */
-        padding-top: 5vh !important; /* 상단 여백을 대폭 줄임 */
-        min-height: 100vh !important;
+        align-items: flex-start !important;
+        padding-top: 0 !important;
+        margin-top: 0 !important;
+        min-height: 80vh !important;
     }
     
     .login-box {
@@ -108,7 +119,7 @@ if st.session_state.authenticated_user is None:
     with col_mid:
         st.markdown('<div class="login-container"><div class="login-box">', unsafe_allow_html=True)
         
-        # 🚀 이미지 없이 텍스트로만 깔끔하게 구성
+        # 이미지 없이 텍스트로만 깔끔하게 구성
         st.markdown('<div class="login-title">🏛️ 중소기업경영지원단</div>', unsafe_allow_html=True)
         st.markdown("<p style='color:#666; font-size:1.1rem; margin-bottom: 30px;'>벤처인증 AI 마스터 컨설턴트 로그인</p>", unsafe_allow_html=True)
         
