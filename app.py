@@ -29,7 +29,7 @@ def load_db():
     
     df = pd.read_csv(DB_FILE)
     
-    # 🚀 [DB 자동 복구 로직] 구형 CSV 파일을 읽더라도 에러가 나지 않도록 누락된 열 자동 추가
+    # 구형 CSV 파일을 읽더라도 에러가 나지 않도록 누락된 열 자동 추가
     if 'usage_count' not in df.columns:
         df['usage_count'] = 0
     if 'last_month' not in df.columns:
@@ -46,20 +46,20 @@ def load_db():
 def save_db(df):
     df.to_csv(DB_FILE, index=False)
 
-# 페이지 로드 시 최신 DB 읽어오기
 user_db = load_db()
 
 # --- [1. 시스템 초기화 및 세션 상태 관리] ---
 if 'authenticated_user' not in st.session_state:
     st.session_state.authenticated_user = None
 
+# 화면 완전 초기화를 위한 고유 키 관리
 if 'uploader_key' not in st.session_state:
     st.session_state.uploader_key = "1"
 
 # 📊 월간 횟수 제한 설정
 MAX_MONTHLY_LIMIT = 30 
 
-# --- [2. 사이드바: 로그인 및 승인 신청 시스템 (DB 연동)] ---
+# --- [2. 사이드바: 로그인 및 승인 신청 시스템] ---
 with st.sidebar:
     st.title("🔐 접근 제어")
     
@@ -150,7 +150,7 @@ except Exception as e:
     st.error(f"⚠️ API 연결 오류: {e}")
     st.stop()
 
-# --- [4. 관리자 전용: 사용자 승인 제어판 (DB 연동)] ---
+# --- [4. 관리자 전용: 사용자 승인 제어판] ---
 user_idx = user_db[user_db['email'] == st.session_state.authenticated_user].index[0]
 if user_db.at[user_idx, 'is_admin']:
     with st.expander("👑 관리자 전용: 사용자 승인 및 관리", expanded=False):
@@ -192,7 +192,7 @@ with col1:
         horizontal=False
     )
     
-    uploaded_file = st.file_uploader("사업자등록증 업로드 (JPG, PNG, PDF)", type=["jpg", "png", "jpeg", "pdf"], key=st.session_state.uploader_key)
+    uploaded_file = st.file_uploader("사업자등록증 업로드 (JPG, PNG, PDF)", type=["jpg", "png", "jpeg", "pdf"], key=f"uploader_{st.session_state.uploader_key}")
     analysis_image = None
     
     if uploaded_file:
@@ -243,6 +243,12 @@ with col1:
             9. 📋 **연구소/전담부서 인정서** (설립된 경우)
             """)
         
+        user_guide_rec = st.text_area(
+            "💡 추천 추가 가이드라인 (선택사항)", 
+            placeholder="예: 친환경 패키징 기술 위주로 추천해 주세요.", 
+            key=f"guide_rec_{st.session_state.uploader_key}"
+        )
+        
         suggestion_placeholder = st.empty()
 
         if st.button("AI 기술 주제 추천받기"):
@@ -253,12 +259,16 @@ with col1:
                     recommend_prompt = f"""
                     사업자등록증의 종목을 분석하여 [{biz_type}] 분야의 벤처인증용 혁신 기술 주제 3개를 제안해줘.
                     
-                    **[중요 가이드라인]**
+                    **[기본 가이드라인]**
                     1. 모든 추천이 AI, 스마트, 플랫폼 등 특정 기술에만 편중되지 않도록 할 것.
-                    2. 업종이 제조업인 경우: 공정 자동화, 신소재 도입, 정밀 가공 기술 등 하드웨어적 혁신 포함.
-                    3. 업종이 서비스/유통/SW인 경우: 물류 혁신, 친환경 패키징, 독자적인 서비스 알고리즘 등 실질적 차별화 요소 제안.
+                    2. 업종이 제조업인 경우: 공정 자동화, 신소재 도입 등 하드웨어적 혁신 포함.
+                    3. 업종이 서비스/유통/SW인 경우: 물류 혁신, 친환경 패키징 등 실질적 차별화 요소 제안.
                     4. 전문적인 기술 명칭과 함께, 왜 이것이 벤처인증(혁신성)에 유리한지 1문장씩 덧붙일 것.
                     """
+                    
+                    if user_guide_rec.strip():
+                        recommend_prompt += f"\n\n**[컨설턴트 특별 요청사항]**\n다음 내용을 최우선으로 반영하여 추천할 것: {user_guide_rec}"
+                    
                     response = model.generate_content([recommend_prompt, analysis_image])
                     st.session_state.suggestions = response.text
                     user_db.at[user_idx, 'usage_count'] += 1
@@ -278,14 +288,17 @@ with col1:
                     with st.spinner('새로운 혁신 관점으로 다시 탐색 중입니다...'):
                         retry_prompt = f"""
                         사업자등록증의 종목을 분석하여 [{biz_type}] 분야의 벤처인증용 혁신 기술 주제 3개를 '새롭게' 제안해줘.
-                        이전에 제안했던 흔한 주제들은 완전히 배제하고, 새로운 융합 기술이나 최신 트렌드를 반영한 완전히 다른 시각에서 접근할 것.
+                        이전에 제안했던 흔한 주제들은 완전히 배제하고, 완전히 다른 시각에서 접근할 것.
                         
-                        **[중요 가이드라인]**
-                        1. 모든 추천이 AI, 스마트, 플랫폼 등 특정 기술에만 편중되지 않도록 할 것.
-                        2. 업종이 제조업인 경우: 공정 자동화, 신소재 도입, 정밀 가공 기술 등 하드웨어적 혁신 포함.
-                        3. 업종이 서비스/유통/SW인 경우: 물류 혁신, 친환경 패키징, 독자적인 서비스 알고리즘 등 실질적 차별화 요소 제안.
-                        4. 전문적인 기술 명칭과 함께, 왜 이것이 벤처인증(혁신성)에 유리한지 1문장씩 덧붙일 것.
+                        **[기본 가이드라인]**
+                        1. 모든 추천이 특정 기술에만 편중되지 않도록 할 것.
+                        2. 업종에 맞는 하드웨어/소프트웨어 혁신 반영.
+                        3. 전문적인 기술 명칭과 함께 벤처인증 유리 이유 1문장 추가.
                         """
+                        
+                        if user_guide_rec.strip():
+                            retry_prompt += f"\n\n**[컨설턴트 특별 요청사항]**\n다음 내용을 최우선으로 반영하여 추천할 것: {user_guide_rec}"
+                        
                         response = model.generate_content([retry_prompt, analysis_image])
                         st.session_state.suggestions = response.text
                         user_db.at[user_idx, 'usage_count'] += 1
@@ -294,7 +307,17 @@ with col1:
 
 with col2:
     st.subheader("2️⃣ 리포트 생성")
-    selected_topic = st.text_input("신청기술명 입력:", placeholder="기술명을 입력하거나 왼쪽에서 복사하세요.")
+    selected_topic = st.text_input(
+        "신청기술명 입력:", 
+        placeholder="기술명을 입력하거나 왼쪽에서 복사하세요.",
+        key=f"topic_{st.session_state.uploader_key}"
+    )
+    
+    user_guide_rep = st.text_area(
+        "💡 리포트 추가 가이드라인 (선택사항)", 
+        placeholder="예: 6번 경쟁사 분석 항목에 A사와의 차별점을 집중적으로 서술해 주세요. 혹은 시장 규모는 5조 원으로 작성해 주세요.", 
+        key=f"guide_rep_{st.session_state.uploader_key}"
+    )
     
     if st.button("마스터 리포트 생성 🚀", type="primary"):
         if user_db.at[user_idx, 'usage_count'] >= MAX_MONTHLY_LIMIT:
@@ -307,6 +330,11 @@ with col2:
                 당신은 20년 경력의 대한민국 최고의 벤처인증 전문 컨설턴트입니다. 
                 신청기술 [{selected_topic}]에 대해 다음 11개 항목을 각각 상세히 작성하세요. 
                 각 항목은 공백 포함 700자 내외의 풍부한 분량이어야 합니다.
+
+                **[데이터 작성 엄격 가이드]**
+                1. 시장 규모, 연평균 성장률, 기대 매출 등 모든 숫자 데이터는 절대 허구로 지어내지 마세요.
+                2. 신뢰할 수 있는 산업 통계나 공신력 있는 연구 기관의 데이터를 기반으로 현실적이고 보수적인 수치를 작성하세요.
+                3. 최신 정확한 숫자를 모를 경우, 해당 산업의 보편적인 동향을 바탕으로 논리적으로 타당한 추정치만 제시하세요.
 
                 특히 [1. 신청기술 요약 및 표준 양식]은 반드시 아래 형식을 엄격히 준수하세요:
 
@@ -333,6 +361,10 @@ with col2:
                 ### [10. 자금조달 계획의 구체적 방안]
                 ### [11. 연계 가능 정책자금 추천]
                 """
+                
+                if user_guide_rep.strip():
+                    form_prompt += f"\n\n**[컨설턴트 특별 요청사항]**\n리포트 작성 시 다음 지시사항을 반드시 지켜서 반영할 것:\n{user_guide_rep}"
+                
                 try:
                     input_data = [form_prompt, analysis_image] if analysis_image else form_prompt
                     response = model.generate_content(input_data)
