@@ -16,7 +16,7 @@ st.set_page_config(page_title="벤처인증 AI 마스터 컨설턴트", layout="
 
 # --- [1. 사용자 관리 및 사용량 DB (자체 승인 시스템)] ---
 if 'user_db' not in st.session_state:
-    # 관리자 계정 설정 (incheon00@gmail.com 반영)
+    # 관리자 계정 설정
     st.session_state.user_db = pd.DataFrame([
         {"email": "incheon00@gmail.com", "approved": True, "is_admin": True, "created_at": "2026-02-14", "usage_count": 0, "last_month": date.today().month},
         {"email": "임원근@gmail.com", "approved": True, "is_admin": True, "created_at": "2026-02-14", "usage_count": 0, "last_month": date.today().month},
@@ -26,7 +26,7 @@ if 'user_db' not in st.session_state:
 if 'authenticated_user' not in st.session_state:
     st.session_state.authenticated_user = None
 
-# 📊 월간 횟수 제한 설정 (숫자만 수정하면 즉시 반영)
+# 📊 월간 횟수 제한 설정
 MAX_MONTHLY_LIMIT = 30 
 
 # --- [2. 사이드바: 로그인 및 승인 신청 시스템] ---
@@ -77,7 +77,6 @@ with st.sidebar:
         st.divider()
         idx = st.session_state.user_db[st.session_state.user_db['email'] == st.session_state.authenticated_user].index[0]
         
-        # 월간 초기화 로직
         current_month = date.today().month
         if st.session_state.user_db.at[idx, 'last_month'] != current_month:
             st.session_state.user_db.at[idx, 'usage_count'] = 0
@@ -89,7 +88,7 @@ with st.sidebar:
         st.write(f"나의 사용량: **{user_usage} / {MAX_MONTHLY_LIMIT}**")
         st.progress(min(user_usage / MAX_MONTHLY_LIMIT, 1.0))
 
-# --- [3. 인증 성공 시: 동적 모델 할당 로직 (원근님 요청 핵심 로직)] ---
+# --- [3. 로그인 체크 및 AI 모델 매칭 로직] ---
 if st.session_state.authenticated_user is None:
     st.title("🏛️ 벤처인증 통합 컨설팅 대시보드")
     st.info("💡 사이드바에서 이메일 로그인 후 이용 가능합니다.")
@@ -98,37 +97,27 @@ if st.session_state.authenticated_user is None:
 try:
     API_KEY = st.secrets["gemini_api_key"]
     genai.configure(api_key=API_KEY)
-except Exception:
-    st.error("⚠️ Secrets 설정에서 API 키를 찾을 수 없습니다.")
-    st.stop()
-
-available_models = []
-try:
+    
+    # 동적 모델 할당
+    available_models = []
     for m in genai.list_models():
         if 'generateContent' in m.supported_generation_methods:
-            # 모델 명칭에서 'models/' 제거하여 리스트업
             available_models.append(m.name.replace('models/', ''))
+            
+    target_model_name = ""
+    for preferred in ['gemini-1.5-flash', 'gemini-1.5-pro', 'gemini-pro']:
+        if preferred in available_models:
+            target_model_name = preferred
+            break
+            
+    if not target_model_name and available_models:
+        target_model_name = available_models[0]
+        
+    model = genai.GenerativeModel(target_model_name)
+    st.sidebar.success(f"✅ 가동 중인 AI 엔진: **{target_model_name}**")
 except Exception as e:
-    st.error(f"⚠️ 구글 AI 서버 통신 오류: {e}")
+    st.error(f"⚠️ API 연결 오류: {e}")
     st.stop()
-
-# 선호 모델 순서대로 체크
-target_model_name = ""
-for preferred in ['gemini-1.5-flash', 'gemini-1.5-pro', 'gemini-pro-vision', 'gemini-pro']:
-    if preferred in available_models:
-        target_model_name = preferred
-        break
-
-# 만약 선호 모델이 없으면 리스트의 첫 번째 모델 사용
-if not target_model_name and available_models:
-    target_model_name = available_models[0]
-
-if not target_model_name:
-    st.error("⚠️ 사용 가능한 AI 엔진을 찾을 수 없습니다.")
-    st.stop()
-
-model = genai.GenerativeModel(target_model_name)
-st.sidebar.success(f"✅ AI 엔진 가동: **{target_model_name}**")
 
 # --- [4. 관리자 전용: 사용자 승인 제어판] ---
 user_idx = st.session_state.user_db[st.session_state.user_db['email'] == st.session_state.authenticated_user].index[0]
@@ -145,45 +134,121 @@ if st.session_state.user_db.at[user_idx, 'is_admin']:
             st.session_state.user_db.loc[st.session_state.user_db['email'] == target_email, 'approved'] = False
             st.rerun()
 
-# --- [5. 메인 UI: 분석 및 리포트 로직 (업종 맞춤형 강화)] ---
+# --- [5. 메인 UI 및 업종 맞춤형 서류 가이드 기능] ---
 st.title("🏛️ 벤처인증 통합 컨설팅 대시보드")
 col1, col2 = st.columns(2)
 
 with col1:
     st.subheader("1️⃣ 분석 및 서류 가이드")
-    uploaded_file = st.file_uploader("사업자등록증 업로드 (JPG, PNG, PDF)", type=["jpg", "png", "jpeg", "pdf"])
     
+    biz_type = st.radio(
+        "🏢 컨설팅 대상 기업의 업종/업력을 선택하세요",
+        ["일반 기업 (제조/서비스 등)", "IT / 소프트웨어", "예비창업자 및 3년 미만 초기기업"],
+        horizontal=False
+    )
+    
+    uploaded_file = st.file_uploader("사업자등록증 업로드 (JPG, PNG, PDF)", type=["jpg", "png", "jpeg", "pdf"])
     analysis_image = None
+    
     if uploaded_file:
         if uploaded_file.type == "application/pdf":
             try:
                 pages = convert_from_bytes(uploaded_file.read())
                 if pages: analysis_image = pages[0]
-            except Exception:
-                st.error("PDF 변환 오류 발생. poppler-utils 설치를 확인하세요.")
+            except: st.error("PDF 변환 오류 발생")
         else:
             analysis_image = Image.open(uploaded_file)
         
-        st.warning("🔔 **벤처인증 신청 필수 서류 9가지 준비 확인**")
-        st.markdown("* ✅ **사업자등록증** | 📋 **법인등기부등본** | 📋 **재무제표** | 📋 **연구소인정서** 등")
+        st.warning(f"🔔 **[{biz_type}] 벤처인증 신청 필수 서류 확인**")
         
+        if biz_type == "일반 기업 (제조/서비스 등)":
+            st.markdown("""
+            1. ✅ **사업자등록증명원** (또는 사업자등록증 사본)
+            2. 📋 **법인등기부등본** (말소사항 포함, 최근 3개월 이내 발급분)
+            3. 📋 **재무제표** (최근 3개년치 - 재무상태표, 손익계산서 등 포함)
+            4. 📋 **부가가치세과세표준증명원** (최근 3개년치)
+            5. 📋 **고용보험 사업장 취득자 명부** (전체 인원 확인용)
+            6. 📋 **4대 사회보험 사업장 가입자 명부**
+            7. 📋 **주주명부** (최근 결산기 기준, 명판 및 인감 날인 필수)
+            8. 📋 **기업부설연구소 인증서** (또는 연구개발전담부서 인정서)
+            9. 📋 **지식재산권 등록증/출원서** (특허, 실용신안 등 기술력 증빙 서류)
+            """)
+        elif biz_type == "IT / 소프트웨어":
+            st.markdown("""
+            1. ✅ **사업자등록증명원** (또는 사업자등록증 사본)
+            2. 📋 **법인등기부등본** (말소사항 포함)
+            3. 📋 **재무제표 & 부가세증명원** (최근 3개년치)
+            4. 📋 **고용/4대보험 가입자 명부** (핵심 개발 인력 비율 확인 필수)
+            5. 📋 **주주명부** (최근 결산기 기준, 명판 및 인감 날인 필수)
+            6. 📋 **기업부설연구소/전담부서 인정서**
+            7. 📋 **프로그램 등록증 및 지식재산권** (SW 저작권 등 필수 증빙)
+            8. 📋 **서비스/앱 소개서 및 UI/UX 화면 캡처본** (실적 및 기술성 증빙 보조자료)
+            9. 📋 **서버 및 도메인 등록 관련 증빙** (필요시)
+            """)
+        else:
+            st.markdown("""
+            1. ✅ **사업자등록증명원** (창업 기업) / 예비창업자는 대표자 신분증 사본
+            2. 📋 **법인등기부등본** (법인인 경우 설립일 기준)
+            3. 📋 **재무제표 및 부가세증명원** (설립일~최근 결산일, 재무 실적 없으면 추정재무제표)
+            4. 📋 **고용/4대보험 가입자 명부** (현재 채용 인원 기준)
+            5. 📋 **주주명부** (현재 기준 명판 및 인감 날인)
+            6. 📋 **사업계획서** (초기 창업자용 상세 비즈니스 모델 및 기술 계획서 필수)
+            7. 📋 **지식재산권 출원서** (등록 전이라도 기술 준비 상황을 증빙할 출원번호 통지서)
+            8. 📋 **대표자 및 핵심인력 이력서/경력증명서** (인적 역량 평가용)
+            9. 📋 **연구소/전담부서 인정서** (설립된 경우)
+            """)
+        
+        # 추천 결과 표시 영역을 제어하기 위한 placeholder
+        suggestion_placeholder = st.empty()
+
+        # 첫 번째 추천 버튼
         if st.button("AI 기술 주제 추천받기"):
             if st.session_state.user_db.at[user_idx, 'usage_count'] >= MAX_MONTHLY_LIMIT:
                 st.error("이번 달 사용 횟수를 초과했습니다.")
             else:
-                with st.spinner('종목 분석 중...'):
-                    # 업종 다양성을 위한 프롬프트 가이드라인 적용
-                    recommend_prompt = """
-                    사업자등록증의 종목을 분석하여 벤처인증용 혁신 기술 주제 3개를 전문적인 제목으로 제안해줘.
-                    IT 기술에만 국한되지 말고 제조 공정, 신소재, 설비 자동화, 친환경 혁신 등 업종의 특성에 맞는 실질적인 주제를 추천할 것.
+                with st.spinner('종목 분석 및 기술 추천 중...'):
+                    recommend_prompt = f"""
+                    사업자등록증의 종목을 분석하여 [{biz_type}] 분야의 벤처인증용 혁신 기술 주제 3개를 제안해줘.
+                    
+                    **[중요 가이드라인]**
+                    1. 모든 추천이 AI, 스마트, 플랫폼 등 특정 기술에만 편중되지 않도록 할 것.
+                    2. 업종이 제조업인 경우: 공정 자동화, 신소재 도입, 정밀 가공 기술 등 하드웨어적 혁신 포함.
+                    3. 업종이 서비스/유통/SW인 경우: 물류 혁신, 친환경 패키징, 독자적인 서비스 알고리즘 등 실질적 차별화 요소 제안.
+                    4. 전문적인 기술 명칭과 함께, 왜 이것이 벤처인증(혁신성)에 유리한지 1문장씩 덧붙일 것.
                     """
                     response = model.generate_content([recommend_prompt, analysis_image])
                     st.session_state.suggestions = response.text
                     st.session_state.user_db.at[user_idx, 'usage_count'] += 1
                     st.rerun()
 
-    if 'suggestions' in st.session_state:
-        st.success(st.session_state.suggestions)
+        # 추천 결과가 있을 경우 화면에 표시 및 재추천 버튼 렌더링
+        if 'suggestions' in st.session_state and st.session_state.suggestions:
+            suggestion_placeholder.success(st.session_state.suggestions)
+            
+            # 재추천 버튼 클릭 시
+            if st.button("🔄 다른 기술 주제 더 보기"):
+                if st.session_state.user_db.at[user_idx, 'usage_count'] >= MAX_MONTHLY_LIMIT:
+                    st.error("이번 달 사용 횟수를 초과했습니다.")
+                else:
+                    # 기존 추천 내용을 화면에서 즉시 리셋 (비우기)
+                    suggestion_placeholder.empty()
+                    st.session_state.suggestions = "" 
+                    
+                    with st.spinner('새로운 혁신 관점으로 다시 탐색 중입니다...'):
+                        retry_prompt = f"""
+                        사업자등록증의 종목을 분석하여 [{biz_type}] 분야의 벤처인증용 혁신 기술 주제 3개를 '새롭게' 제안해줘.
+                        이전에 제안했던 흔한 주제들은 완전히 배제하고, 새로운 융합 기술이나 최신 트렌드를 반영한 완전히 다른 시각에서 접근할 것.
+                        
+                        **[중요 가이드라인]**
+                        1. 모든 추천이 AI, 스마트, 플랫폼 등 특정 기술에만 편중되지 않도록 할 것.
+                        2. 업종이 제조업인 경우: 공정 자동화, 신소재 도입, 정밀 가공 기술 등 하드웨어적 혁신 포함.
+                        3. 업종이 서비스/유통/SW인 경우: 물류 혁신, 친환경 패키징, 독자적인 서비스 알고리즘 등 실질적 차별화 요소 제안.
+                        4. 전문적인 기술 명칭과 함께, 왜 이것이 벤처인증(혁신성)에 유리한지 1문장씩 덧붙일 것.
+                        """
+                        response = model.generate_content([retry_prompt, analysis_image])
+                        st.session_state.suggestions = response.text
+                        st.session_state.user_db.at[user_idx, 'usage_count'] += 1
+                        st.rerun()
 
 with col2:
     st.subheader("2️⃣ 리포트 생성")
@@ -200,9 +265,8 @@ with col2:
                 당신은 20년 경력의 대한민국 최고의 벤처인증 전문 컨설턴트입니다. 
                 신청기술 [{selected_topic}]에 대해 다음 11개 항목을 각각 상세히 작성하세요. 
                 각 항목은 공백 포함 700자 내외의 풍부한 분량이어야 합니다.
-                각 항목의 구분은 반드시 '### [항목명]' 형식을 유지하세요.
 
-                특히 [1. 신청기술 요약 및 표준 양식]은 반드시 아래 형식을 엄격히 준수하여 출력하세요:
+                특히 [1. 신청기술 요약 및 표준 양식]은 반드시 아래 형식을 엄격히 준수하세요:
 
                 신청기술(제품/서비스)명: [{selected_topic}]
                 신청기술(제품/서비스)요약: [기술의 핵심 정의와 특징 요약]
@@ -228,8 +292,8 @@ with col2:
                 ### [11. 연계 가능 정책자금 추천]
                 """
                 try:
-                    content = [form_prompt, analysis_image] if analysis_image else form_prompt
-                    response = model.generate_content(content)
+                    input_data = [form_prompt, analysis_image] if analysis_image else form_prompt
+                    response = model.generate_content(input_data)
                     report_text = response.text
                     sections = report_text.split('### ')
                     st.session_state.report_sections = [s for s in sections if s.strip()]
