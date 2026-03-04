@@ -15,7 +15,7 @@ except ImportError:
 # --- [0. 페이지 설정 및 디자인 완전 강제 적용 CSS] ---
 st.set_page_config(page_title="벤처인증 AI 마스터 컨설턴트", layout="wide")
 
-# 디자인이 절대 씹히지 않도록 초강력 CSS 적용
+# 디자인 최적화를 위한 초강력 CSS 적용
 custom_css = """
 <style>
     /* 1. 배경 그라데이션 강제 적용 */
@@ -23,51 +23,63 @@ custom_css = """
         background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%) !important;
     }
     
-    /* 2. 중앙 로그인 박스 레이아웃 (높이와 간격 조정) */
+    /* 2. 중앙 로그인 박스 레이아웃 (상단 정렬로 스크롤 최소화) */
     .login-container {
         display: flex !important;
         justify-content: center !important;
-        align-items: center !important;
-        min-height: 80vh !important;
+        align-items: flex-start !important;
+        padding-top: 20px !important;
+        min-height: 100vh !important;
     }
     
     .login-box {
         background-color: white !important;
-        padding: 30px !important;
+        padding: 25px !important;
         border-radius: 20px !important;
-        box-shadow: 0 20px 40px rgba(0, 0, 0, 0.2) !important;
+        box-shadow: 0 15px 35px rgba(0, 0, 0, 0.2) !important;
         text-align: center !important;
-        max-width: 500px !important;
+        max-width: 480px !important;
         width: 100% !important;
         border-top: 10px solid #0b1f52 !important;
     }
 
-    /* 3. 이미지(확인서)를 로고처럼 꽉 채우기 - 잘림 및 작게 보임 방지 */
+    /* 3. 이미지(확인서) 최적화 - 가로 꽉 채우기 및 비율 유지 */
     [data-testid="stImage"] > img {
         width: 100% !important;
         height: auto !important;
-        max-height: 350px !important;
-        object-fit: cover !important; /* 이미지 비율을 맞추며 꽉 채움 */
-        border-radius: 12px !important;
-        margin-bottom: 20px !important;
+        max-height: 320px !important;
+        object-fit: contain !important; /* 이미지 전체가 보이도록 비율 유지 */
+        border-radius: 10px !important;
+        margin-bottom: 15px !important;
         border: 1px solid #eee !important;
     }
 
     .login-title {
         color: #0b1f52 !important;
         font-weight: 800 !important;
-        font-size: 28px !important;
-        margin-top: 10px !important;
+        font-size: 26px !important;
+        margin-top: 5px !important;
     }
 
     /* 4. 대시보드 내부 프리미엄 헤더 */
     .premium-header {
         background: linear-gradient(135deg, #0b1f52 0%, #1a3673 100%) !important;
         color: white !important;
-        padding: 2rem !important;
-        border-radius: 15px !important;
-        border-bottom: 5px solid #d4af37 !important;
+        padding: 1.5rem !important;
+        border-radius: 12px !important;
+        border-bottom: 4px solid #d4af37 !important;
         text-align: center !important;
+    }
+    
+    /* 리포트 카드 디자인 */
+    .report-card {
+        background-color: white !important;
+        padding: 20px !important;
+        border-radius: 8px !important;
+        line-height: 1.8 !important;
+        border: 1px solid #e0e0e0 !important;
+        border-left: 6px solid #0b1f52 !important;
+        margin-bottom: 10px !important;
     }
 </style>
 """
@@ -100,15 +112,12 @@ MAX_MONTHLY_LIMIT = 30
 
 # --- [2. 중앙 집중형 로그인 화면 구현] ---
 if st.session_state.authenticated_user is None:
-    # 화면 정중앙 배치를 위해 컬럼 비율 조정
     _, col_mid, _ = st.columns([0.5, 1, 0.5])
     
     with col_mid:
-        st.write("##") # 상단 여백
-        # HTML div로 박스 시작
-        st.markdown('<div class="login-box">', unsafe_allow_html=True)
+        st.markdown('<div class="login-container"><div class="login-box">', unsafe_allow_html=True)
         
-        # 🚀 확인서 이미지 (파일명: venture_cert.png 가 폴더에 있어야 함)
+        # 🚀 주식회사 욜사이트 확인서 이미지 (파일명: venture_cert.png)
         try:
             logo = Image.open("venture_cert.png")
             st.image(logo)
@@ -116,7 +125,7 @@ if st.session_state.authenticated_user is None:
             st.markdown("<h2 style='color:#0b1f52;'>🏛️ 중소기업경영지원단</h2>", unsafe_allow_html=True)
         
         st.markdown('<div class="login-title">중소기업경영지원단</div>', unsafe_allow_html=True)
-        st.markdown("<p style='color:#666; margin-bottom: 25px;'>벤처인증 AI 마스터 컨설턴트 로그인</p>", unsafe_allow_html=True)
+        st.markdown("<p style='color:#666; font-size: 0.95rem; margin-bottom: 15px;'>벤처인증 AI 마스터 컨설턴트 로그인</p>", unsafe_allow_html=True)
         
         login_email = st.text_input("이메일 입력", placeholder="example@gmail.com", label_visibility="collapsed").strip().lower()
         
@@ -136,7 +145,7 @@ if st.session_state.authenticated_user is None:
                 st.success("📩 신청 완료!")
             else: st.warning("이미 신청됨")
             
-        st.markdown('</div>', unsafe_allow_html=True)
+        st.markdown('</div></div>', unsafe_allow_html=True)
     st.stop()
 
 # =====================================================================
@@ -148,6 +157,7 @@ with st.sidebar:
     if st.button("로그아웃", use_container_width=True):
         st.session_state.authenticated_user = None
         st.rerun()
+    
     idx = user_db[user_db['email'] == st.session_state.authenticated_user].index[0]
     st.write(f"📊 월 사용량: {user_db.at[idx, 'usage_count']} / {MAX_MONTHLY_LIMIT}")
 
@@ -228,12 +238,16 @@ with col2:
                 st.session_state.report_sections = response.text.split('### ')
                 user_db.at[idx, 'usage_count'] += 1; save_db(user_db); st.rerun()
 
+# --- [결과 출력] ---
 if 'report_sections' in st.session_state:
     st.divider()
     full_report = "\n\n".join(st.session_state.report_sections)
     st.download_button("💾 전체 리포트 다운로드", full_report, file_name=f"벤처리포트_{selected_topic}.txt")
     for section in st.session_state.report_sections:
         if section.strip():
-            title = section.split('\n', 1)[0].strip('[] ')
+            # 항목 제목과 내용 분리
+            parts = section.split('\n', 1)
+            title = parts[0].strip('[] ')
+            body = parts[1] if len(parts) > 1 else ""
             with st.expander(f"📌 {title}", expanded=False):
-                st.write(section)
+                st.markdown(f'<div class="report-card">{body.replace("\n", "<br>")}</div>', unsafe_allow_html=True)
