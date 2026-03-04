@@ -147,7 +147,7 @@ if st.session_state.authenticated_user is None:
         st.markdown('</div></div>', unsafe_allow_html=True)
     st.stop()
 
-# --- [3. 메인 대시보드 및 🚀 동적 AI 제어 시스템] ---
+# --- [3. 메인 대시보드 및 동적 AI 제어 시스템] ---
 with st.sidebar:
     st.success(f"👤 접속: {st.session_state.authenticated_user}")
     if st.button("로그아웃", use_container_width=True):
@@ -156,15 +156,13 @@ with st.sidebar:
     idx = user_db[user_db['email'] == st.session_state.authenticated_user].index[0]
     st.write(f"📊 월 사용량: {user_db.at[idx, 'usage_count']} / {MAX_MONTHLY_LIMIT}")
 
-# 🚀 동적 제어 로직: 가용한 모델을 실시간 검색하여 자동 연결
+# 동적 제어 로직: 가용한 모델을 실시간 검색하여 자동 연결
 try:
     API_KEY = st.secrets["gemini_api_key"]
     genai.configure(api_key=API_KEY)
     
-    # 1. 사용 가능한 모델 리스트 확보
     models = [m.name for m in genai.list_models() if 'generateContent' in m.supported_generation_methods]
     
-    # 2. 우선순위 모델 자동 매칭 (NotFound 방지)
     selected_model = ""
     for target in ["gemini-1.5-flash", "gemini-1.5-pro", "gemini-pro"]:
         match = [m for m in models if target in m]
@@ -193,7 +191,7 @@ if st.button("🔄 새 기업 컨설팅 시작", type="secondary"):
     st.session_state.uploader_key = str(int(st.session_state.uploader_key) + 1)
     st.rerun()
 
-# --- [4. 기능 영역] ---
+# --- [4. 기능 영역 (🚀 예외 처리 강화)] ---
 col1, col2 = st.columns(2)
 
 with col1:
@@ -215,10 +213,16 @@ with col1:
         else:
             with st.spinner('분석 중...'):
                 prompt = f"[{biz_type}] 벤처 기술 주제 3개 추천. {user_guide_rec}"
-                # 🚀 동적 제어가 적용된 모델 호출
-                response = model.generate_content([prompt, analysis_image] if analysis_image else prompt)
-                st.session_state.suggestions = response.text
-                user_db.at[idx, 'usage_count'] += 1; save_db(user_db); st.rerun()
+                try:
+                    # 🚀 API 한도 초과 에러를 부드럽게 잡아내는 예외 처리
+                    response = model.generate_content([prompt, analysis_image] if analysis_image else prompt)
+                    st.session_state.suggestions = response.text
+                    user_db.at[idx, 'usage_count'] += 1; save_db(user_db); st.rerun()
+                except Exception as e:
+                    if "ResourceExhausted" in str(e) or "429" in str(e):
+                        st.error("⏳ 구글 AI 서버의 분당/일일 사용 한도(Quota)를 초과했습니다. 약 1분 정도 기다리신 후 다시 시도해 주세요.")
+                    else:
+                        st.error(f"⚠️ 분석 중 오류가 발생했습니다: {e}")
 
     if 'suggestions' in st.session_state:
         st.success(st.session_state.suggestions)
@@ -247,9 +251,16 @@ with col2:
                 ### [10. 자금조달 계획의 구체적 방안]
                 ### [11. 연계 가능 정책자금 추천]
                 """
-                response = model.generate_content([form_prompt, analysis_image] if analysis_image else form_prompt)
-                st.session_state.report_sections = response.text.split('### ')
-                user_db.at[idx, 'usage_count'] += 1; save_db(user_db); st.rerun()
+                try:
+                    # 🚀 API 한도 초과 에러를 부드럽게 잡아내는 예외 처리
+                    response = model.generate_content([form_prompt, analysis_image] if analysis_image else form_prompt)
+                    st.session_state.report_sections = response.text.split('### ')
+                    user_db.at[idx, 'usage_count'] += 1; save_db(user_db); st.rerun()
+                except Exception as e:
+                    if "ResourceExhausted" in str(e) or "429" in str(e):
+                        st.error("⏳ 구글 AI 서버의 분당/일일 사용 한도(Quota)를 초과했습니다. 리포트 생성은 많은 자원을 소모하므로 잠시 후 다시 시도해 주세요.")
+                    else:
+                        st.error(f"⚠️ 리포트 생성 중 오류가 발생했습니다: {e}")
 
 if 'report_sections' in st.session_state:
     st.divider()
