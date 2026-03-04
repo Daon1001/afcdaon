@@ -14,7 +14,7 @@ except ImportError:
 # --- [0. 페이지 설정] ---
 st.set_page_config(page_title="벤처인증 AI 마스터 컨설턴트", layout="wide")
 
-# --- [1. 사용자 관리 및 사용량 DB (자체 승인 시스템)] ---
+# --- [1. 시스템 초기화 및 세션 상태 관리] ---
 if 'user_db' not in st.session_state:
     # 관리자 계정 설정
     st.session_state.user_db = pd.DataFrame([
@@ -26,8 +26,12 @@ if 'user_db' not in st.session_state:
 if 'authenticated_user' not in st.session_state:
     st.session_state.authenticated_user = None
 
+# 파일 업로더 초기화를 위한 키
+if 'uploader_key' not in st.session_state:
+    st.session_state.uploader_key = "1"
+
 # 📊 월간 횟수 제한 설정
-MAX_MONTHLY_LIMIT = 30 
+MAX_MONTHLY_LIMIT = 100 
 
 # --- [2. 사이드바: 로그인 및 승인 신청 시스템] ---
 with st.sidebar:
@@ -134,8 +138,22 @@ if st.session_state.user_db.at[user_idx, 'is_admin']:
             st.session_state.user_db.loc[st.session_state.user_db['email'] == target_email, 'approved'] = False
             st.rerun()
 
-# --- [5. 메인 UI 및 업종 맞춤형 서류 가이드 기능] ---
-st.title("🏛️ 벤처인증 통합 컨설팅 대시보드")
+# --- [5. 메인 UI (타이틀 및 초기화 버튼)] ---
+col_title, col_reset = st.columns([8, 2])
+with col_title:
+    st.title("🏛️ 벤처인증 통합 컨설팅 대시보드")
+with col_reset:
+    st.write("") # 버튼 위치 조정을 위한 여백
+    if st.button("🔄 새 기업 컨설팅 시작 (초기화)", use_container_width=True, type="secondary"):
+        # 생성된 데이터 완전 삭제
+        for key in ['suggestions', 'report_sections']:
+            if key in st.session_state:
+                del st.session_state[key]
+        # 파일 업로더 초기화를 위해 고유 키 값을 변경
+        st.session_state.uploader_key = str(int(st.session_state.uploader_key) + 1)
+        st.rerun()
+
+# --- [6. 본문 기능 영역] ---
 col1, col2 = st.columns(2)
 
 with col1:
@@ -147,7 +165,8 @@ with col1:
         horizontal=False
     )
     
-    uploaded_file = st.file_uploader("사업자등록증 업로드 (JPG, PNG, PDF)", type=["jpg", "png", "jpeg", "pdf"])
+    # uploader_key를 사용하여 초기화 시 파일도 함께 비워지도록 설정
+    uploaded_file = st.file_uploader("사업자등록증 업로드 (JPG, PNG, PDF)", type=["jpg", "png", "jpeg", "pdf"], key=st.session_state.uploader_key)
     analysis_image = None
     
     if uploaded_file:
@@ -198,7 +217,6 @@ with col1:
             9. 📋 **연구소/전담부서 인정서** (설립된 경우)
             """)
         
-        # 추천 결과 표시 영역을 제어하기 위한 placeholder
         suggestion_placeholder = st.empty()
 
         # 첫 번째 추천 버튼
@@ -221,16 +239,14 @@ with col1:
                     st.session_state.user_db.at[user_idx, 'usage_count'] += 1
                     st.rerun()
 
-        # 추천 결과가 있을 경우 화면에 표시 및 재추천 버튼 렌더링
+        # 추천 결과 표시 및 재추천 버튼
         if 'suggestions' in st.session_state and st.session_state.suggestions:
             suggestion_placeholder.success(st.session_state.suggestions)
             
-            # 재추천 버튼 클릭 시
             if st.button("🔄 다른 기술 주제 더 보기"):
                 if st.session_state.user_db.at[user_idx, 'usage_count'] >= MAX_MONTHLY_LIMIT:
                     st.error("이번 달 사용 횟수를 초과했습니다.")
                 else:
-                    # 기존 추천 내용을 화면에서 즉시 리셋 (비우기)
                     suggestion_placeholder.empty()
                     st.session_state.suggestions = "" 
                     
@@ -302,7 +318,7 @@ with col2:
                 except Exception as e:
                     st.error(f"오류: {e}")
 
-# --- [6. 결과 출력] ---
+# --- [7. 결과 출력] ---
 st.divider()
 if 'report_sections' in st.session_state:
     st.subheader("📄 벤처인증 마스터 컨설팅 리포트")
