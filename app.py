@@ -15,10 +15,43 @@ except ImportError:
 # --- [0. 페이지 설정 및 프리미엄 CSS 디자인 적용] ---
 st.set_page_config(page_title="벤처인증 AI 마스터 컨설턴트", layout="wide")
 
-# 고급스러운 UI를 위한 커스텀 CSS (벤처확인서 감성: 남색+금색 포인트)
+# 고급스러운 UI를 위한 커스텀 CSS (전체 그라데이션 배경 및 중앙 로그인 카드)
 custom_css = """
 <style>
-    /* 메인 그라데이션 헤더 */
+    /* 전체 배경 그라데이션 (은은하고 세련된 실버 블루 톤) */
+    .stApp {
+        background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+    }
+    
+    /* 중앙 로그인 박스 스타일 (네이버/스토브 스타일) */
+    .login-container {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        margin-top: 10vh;
+    }
+    .login-box {
+        background-color: rgba(255, 255, 255, 0.95);
+        padding: 50px 40px;
+        border-radius: 16px;
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.15);
+        text-align: center;
+        border-top: 5px solid #0b1f52;
+    }
+    .login-title {
+        color: #0b1f52;
+        font-weight: 900;
+        font-size: 32px;
+        margin-bottom: 10px;
+        letter-spacing: -1px;
+    }
+    .login-subtitle {
+        color: #666;
+        font-size: 16px;
+        margin-bottom: 40px;
+    }
+
+    /* 메인 그라데이션 헤더 (로그인 후 대시보드 상단) */
     .premium-header {
         background: linear-gradient(135deg, #0b1f52 0%, #1a3673 100%);
         color: white;
@@ -27,7 +60,7 @@ custom_css = """
         border-bottom: 5px solid #d4af37;
         text-align: center;
         margin-bottom: 2rem;
-        box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+        box-shadow: 0 4px 15px rgba(0,0,0,0.2);
     }
     .premium-header h1 {
         color: white;
@@ -42,7 +75,7 @@ custom_css = """
     
     /* 전문가 뱃지/메트릭스 박스 */
     .metric-box {
-        background-color: #f8f9fa;
+        background-color: rgba(255, 255, 255, 0.9);
         border-left: 5px solid #0b1f52;
         padding: 15px 20px;
         border-radius: 8px;
@@ -60,11 +93,6 @@ custom_css = """
     .stButton>button:hover {
         transform: translateY(-2px);
         box-shadow: 0 4px 10px rgba(0,0,0,0.15);
-    }
-    
-    /* 기본 배경 및 폰트 다듬기 */
-    .stApp {
-        background-color: #fafbfc;
     }
 </style>
 """
@@ -108,33 +136,38 @@ user_db = load_db()
 if 'authenticated_user' not in st.session_state:
     st.session_state.authenticated_user = None
 
-# 화면 완전 초기화를 위한 고유 키 관리
 if 'uploader_key' not in st.session_state:
     st.session_state.uploader_key = "1"
 
-# 📊 월간 횟수 제한 설정
 MAX_MONTHLY_LIMIT = 30 
 
-# --- [2. 사이드바: 로그인 및 승인 신청 시스템] ---
-with st.sidebar:
-    st.title("🔐 컨설턴트 전용 로그인")
+# --- [2. 중앙 집중형 로그인 화면 로직] ---
+if st.session_state.authenticated_user is None:
+    # 레이아웃을 3등분하여 중앙에만 로그인 박스 배치
+    col_space1, col_login, col_space2 = st.columns([1, 1.2, 1])
     
-    if st.session_state.authenticated_user is None:
-        login_email = st.text_input("이메일 입력", placeholder="example@gmail.com").strip().lower()
-        col_login, col_req = st.columns(2)
+    with col_login:
+        st.markdown('<div class="login-container"><div class="login-box">', unsafe_allow_html=True)
+        st.markdown('<div class="login-title">🏛️ 벤처인증 AI 마스터</div>', unsafe_allow_html=True)
+        st.markdown('<div class="login-subtitle">컨설턴트 전용 시스템에 로그인하세요.</div>', unsafe_allow_html=True)
         
-        if col_login.button("로그인", use_container_width=True, type="primary"):
+        login_email = st.text_input("이메일 계정", placeholder="example@gmail.com", label_visibility="collapsed").strip().lower()
+        
+        st.write("") # 간격 띄우기
+        btn_col1, btn_col2 = st.columns(2)
+        
+        if btn_col1.button("로그인", type="primary", use_container_width=True):
             user_row = user_db[user_db['email'] == login_email]
             if not user_row.empty:
                 if user_row.iloc[0]['approved']:
                     st.session_state.authenticated_user = login_email
                     st.rerun()
                 else:
-                    st.error("❌ 승인 대기 중입니다.")
+                    st.error("❌ 승인 대기 중입니다. 관리자에게 문의하세요.")
             else:
                 st.warning("⚠️ 등록되지 않은 이메일입니다.")
-
-        if col_req.button("승인 신청", use_container_width=True):
+                
+        if btn_col2.button("승인 신청", use_container_width=True):
             if not login_email:
                 st.error("이메일을 입력해주세요.")
             else:
@@ -150,43 +183,43 @@ with st.sidebar:
                     }])
                     user_db = pd.concat([user_db, new_user], ignore_index=True)
                     save_db(user_db)
-                    st.info("📩 승인 신청 완료!")
+                    st.success("📩 승인 신청 완료!")
                 else:
                     st.warning("이미 등록(신청)된 이메일입니다.")
-    else:
-        st.success(f"👤 접속 중: {st.session_state.authenticated_user}")
-        if st.button("로그아웃", use_container_width=True):
-            st.session_state.authenticated_user = None
-            st.rerun()
-
-    # 사용량 표시 UI 및 월간 초기화
-    if st.session_state.authenticated_user:
-        st.divider()
-        idx = user_db[user_db['email'] == st.session_state.authenticated_user].index[0]
-        
-        current_month = date.today().month
-        if user_db.at[idx, 'last_month'] != current_month:
-            user_db.at[idx, 'usage_count'] = 0
-            user_db.at[idx, 'last_month'] = current_month
-            save_db(user_db)
-            
-        user_usage = user_db.at[idx, 'usage_count']
-        remaining = MAX_MONTHLY_LIMIT - user_usage
-        st.caption("🛡️ 이번 달 사용 현황")
-        st.write(f"사용량: **{user_usage} / {MAX_MONTHLY_LIMIT} 회**")
-        st.progress(min(user_usage / MAX_MONTHLY_LIMIT, 1.0))
-
-# --- [3. 로그인 체크 및 AI 모델 매칭 로직] ---
-if st.session_state.authenticated_user is None:
-    st.markdown("""
-        <div class="premium-header">
-            <h1>🏛️ 벤처인증 통합 컨설팅 대시보드</h1>
-            <p>20년 경력의 노하우와 AI 기술의 완벽한 결합 | 혁신성장유형 마스터</p>
-        </div>
-    """, unsafe_allow_html=True)
-    st.info("💡 사이드바에서 이메일 로그인 후 이용 가능합니다.")
+                    
+        st.markdown('</div></div>', unsafe_allow_html=True)
+    
+    # 로그인 전에는 앱의 나머지 부분이 실행되지 않도록 중단
     st.stop()
 
+
+# =====================================================================
+# 로그인 성공 후 실행되는 메인 대시보드 로직
+# =====================================================================
+
+# --- [3. 사이드바: 내 정보 및 로그아웃] ---
+with st.sidebar:
+    st.success(f"👤 접속 중:\n**{st.session_state.authenticated_user}**")
+    if st.button("로그아웃", use_container_width=True):
+        st.session_state.authenticated_user = None
+        st.rerun()
+
+    st.divider()
+    idx = user_db[user_db['email'] == st.session_state.authenticated_user].index[0]
+    
+    current_month = date.today().month
+    if user_db.at[idx, 'last_month'] != current_month:
+        user_db.at[idx, 'usage_count'] = 0
+        user_db.at[idx, 'last_month'] = current_month
+        save_db(user_db)
+        
+    user_usage = user_db.at[idx, 'usage_count']
+    remaining = MAX_MONTHLY_LIMIT - user_usage
+    st.caption("🛡️ 이번 달 사용 현황")
+    st.write(f"사용량: **{user_usage} / {MAX_MONTHLY_LIMIT} 회**")
+    st.progress(min(user_usage / MAX_MONTHLY_LIMIT, 1.0))
+
+# --- [4. AI 모델 매칭 로직] ---
 try:
     API_KEY = st.secrets["gemini_api_key"]
     genai.configure(api_key=API_KEY)
@@ -210,9 +243,8 @@ except Exception as e:
     st.error(f"⚠️ API 연결 오류: {e}")
     st.stop()
 
-# --- [4. 관리자 전용: 사용자 승인 제어판] ---
-user_idx = user_db[user_db['email'] == st.session_state.authenticated_user].index[0]
-if user_db.at[user_idx, 'is_admin']:
+# --- [5. 관리자 전용: 사용자 승인 제어판] ---
+if user_db.at[idx, 'is_admin']:
     with st.expander("👑 관리자 전용: 사용자 승인 및 관리", expanded=False):
         st.dataframe(user_db, use_container_width=True)
         target_email = st.selectbox("승인/해제 대상 선택", user_db['email'])
@@ -227,7 +259,7 @@ if user_db.at[user_idx, 'is_admin']:
             save_db(user_db)
             st.rerun()
 
-# --- [5. 메인 UI (프리미엄 헤더 및 초기화 버튼)] ---
+# --- [6. 메인 UI (프리미엄 헤더 및 초기화 버튼)] ---
 st.markdown("""
     <div class="premium-header">
         <h1>🏛️ 벤처인증 통합 컨설팅 대시보드</h1>
@@ -247,11 +279,10 @@ with col_reset:
         for key in ['suggestions', 'report_sections']:
             if key in st.session_state:
                 del st.session_state[key]
-        # 키값을 올려 모든 입력창과 파일업로더를 완전 리셋
         st.session_state.uploader_key = str(int(st.session_state.uploader_key) + 1)
         st.rerun()
 
-# --- [6. 본문 기능 영역] ---
+# --- [7. 본문 기능 영역] ---
 col1, col2 = st.columns(2)
 
 with col1:
@@ -323,7 +354,7 @@ with col1:
         suggestion_placeholder = st.empty()
 
         if st.button("AI 기술 주제 추천받기 ✨"):
-            if user_db.at[user_idx, 'usage_count'] >= MAX_MONTHLY_LIMIT:
+            if user_db.at[idx, 'usage_count'] >= MAX_MONTHLY_LIMIT:
                 st.error("이번 달 사용 횟수를 초과했습니다.")
             else:
                 with st.spinner('종목 분석 및 기술 추천 중...'):
@@ -341,7 +372,7 @@ with col1:
                     
                     response = model.generate_content([recommend_prompt, analysis_image])
                     st.session_state.suggestions = response.text
-                    user_db.at[user_idx, 'usage_count'] += 1
+                    user_db.at[idx, 'usage_count'] += 1
                     save_db(user_db)
                     st.rerun()
 
@@ -349,7 +380,7 @@ with col1:
             suggestion_placeholder.success(st.session_state.suggestions)
             
             if st.button("🔄 다른 기술 주제 더 보기"):
-                if user_db.at[user_idx, 'usage_count'] >= MAX_MONTHLY_LIMIT:
+                if user_db.at[idx, 'usage_count'] >= MAX_MONTHLY_LIMIT:
                     st.error("이번 달 사용 횟수를 초과했습니다.")
                 else:
                     suggestion_placeholder.empty()
@@ -371,7 +402,7 @@ with col1:
                         
                         response = model.generate_content([retry_prompt, analysis_image])
                         st.session_state.suggestions = response.text
-                        user_db.at[user_idx, 'usage_count'] += 1
+                        user_db.at[idx, 'usage_count'] += 1
                         save_db(user_db)
                         st.rerun()
 
@@ -390,7 +421,7 @@ with col2:
     )
     
     if st.button("마스터 리포트 생성 🚀", type="primary"):
-        if user_db.at[user_idx, 'usage_count'] >= MAX_MONTHLY_LIMIT:
+        if user_db.at[idx, 'usage_count'] >= MAX_MONTHLY_LIMIT:
             st.error("이번 달 사용 횟수를 초과했습니다.")
         elif not selected_topic:
             st.warning("기술명을 입력해 주세요.")
@@ -440,13 +471,13 @@ with col2:
                     report_text = response.text
                     sections = report_text.split('### ')
                     st.session_state.report_sections = [s for s in sections if s.strip()]
-                    user_db.at[user_idx, 'usage_count'] += 1
+                    user_db.at[idx, 'usage_count'] += 1
                     save_db(user_db)
                     st.rerun()
                 except Exception as e:
                     st.error(f"오류: {e}")
 
-# --- [7. 결과 출력] ---
+# --- [8. 결과 출력] ---
 st.divider()
 if 'report_sections' in st.session_state:
     st.subheader("📄 벤처인증 마스터 컨설팅 리포트 결과")
@@ -459,4 +490,4 @@ if 'report_sections' in st.session_state:
             title = lines[0].strip('[] ')
             content = '\n'.join(lines[1:]).strip()
             with st.expander(f"📌 {title}", expanded=False):
-                st.markdown(f"<div style='background-color: white; padding: 25px; border-radius: 8px; line-height: 1.8; border: 1px solid #e0e0e0; border-left: 5px solid #0b1f52;'>{content.replace('\n', '<br>')}</div>", unsafe_allow_html=True)
+                st.markdown(f"<div style='background-color: rgba(255,255,255,0.8); padding: 25px; border-radius: 8px; line-height: 1.8; border: 1px solid #e0e0e0; border-left: 5px solid #0b1f52;'>{content.replace('\n', '<br>')}</div>", unsafe_allow_html=True)
