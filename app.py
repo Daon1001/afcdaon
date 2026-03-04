@@ -17,7 +17,7 @@ st.set_page_config(page_title="벤처인증 AI 마스터 컨설턴트", layout="
 
 custom_css = """
 <style>
-    /* 🚀 1. Streamlit 기본 여백을 극한으로 줄임 */
+    /* 1. Streamlit 기본 여백을 극한으로 줄임 */
     .block-container {
         padding-top: 1rem !important; 
         padding-bottom: 1rem !important;
@@ -34,16 +34,16 @@ custom_css = """
         background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%) !important;
     }
     
-    /* 🚀 3. 로그인 컨테이너: 높이(height) 제한을 없애고 무조건 위로 붙임 */
+    /* 3. 로그인 컨테이너: 높이(height) 제한을 없애고 무조건 위로 붙임 */
     .login-container {
         display: flex !important;
         justify-content: center !important;
-        align-items: flex-start !important; /* 무조건 최상단 정렬 */
+        align-items: flex-start !important; 
         margin-top: 0 !important;
         padding-top: 0 !important;
     }
     
-    /* 🚀 4. 로그인 박스: 화면 맨 위에서 딱 2vh(약 2%)만 띄움 */
+    /* 4. 로그인 박스: 화면 맨 위에서 딱 2vh(약 2%)만 띄움 */
     .login-box {
         background-color: white !important;
         padding: 40px !important;
@@ -53,7 +53,7 @@ custom_css = """
         max-width: 480px !important;
         width: 100% !important;
         border-top: 8px solid #0b1f52 !important;
-        margin-top: 2vh !important; /* 상단 강제 고정의 핵심 */
+        margin-top: 2vh !important; 
     }
 
     /* 텍스트 로고 타이틀 디자인 */
@@ -115,9 +115,8 @@ if 'authenticated_user' not in st.session_state: st.session_state.authenticated_
 if 'uploader_key' not in st.session_state: st.session_state.uploader_key = "1"
 MAX_MONTHLY_LIMIT = 30 
 
-# --- [2. 중앙 집중형 로그인 화면 구현 (최상단 강제 고정)] ---
+# --- [2. 중앙 집중형 로그인 화면 (최상단 강제 고정)] ---
 if st.session_state.authenticated_user is None:
-    # 컬럼을 나누어 중앙 정렬 유도 (상하 여백 유발 요소 제거)
     _, col_mid, _ = st.columns([0.5, 1, 0.5])
     
     with col_mid:
@@ -160,28 +159,35 @@ with st.sidebar:
     idx = user_db[user_db['email'] == st.session_state.authenticated_user].index[0]
     st.write(f"📊 월 사용량: {user_db.at[idx, 'usage_count']} / {MAX_MONTHLY_LIMIT}")
 
-# 🚀 AI 엔진 설정 (동적 제어 적용)
+# --- [1. 인증 성공 시] 동적 모델 할당 로직 ---
 try:
-    API_KEY = st.secrets["gemini_api_key"]
+    API_KEY = st.secrets["gemini_api_key"] 
     genai.configure(api_key=API_KEY)
-    
-    # 가용한 모델 실시간 검색 및 자동 매칭
-    models = [m.name for m in genai.list_models() if 'generateContent' in m.supported_generation_methods]
-    
-    selected_model = ""
-    for target in ["gemini-1.5-flash", "gemini-1.5-pro", "gemini-pro"]:
-        match = [m for m in models if target in m]
-        if match:
-            selected_model = match[0]
-            break
-            
-    if not selected_model and models:
-        selected_model = models[0]
-        
-    model = genai.GenerativeModel(selected_model)
-    st.sidebar.caption(f"🤖 시스템 가동 엔진: {selected_model.replace('models/', '')}")
+except Exception:
+    st.error("⚠️ 비밀 금고(Secrets)에서 API 키를 찾을 수 없습니다.")
+    st.stop()
+
+available_models = []
+try:
+    for m in genai.list_models():
+        if 'generateContent' in m.supported_generation_methods:
+            available_models.append(m.name.replace('models/', ''))
 except Exception as e:
-    st.error(f"⚠️ API 키 설정 오류 또는 AI 엔진 연결 실패: {e}"); st.stop()
+    st.error(f"⚠️ 구글 AI 서버 통신 오류: {e}")
+    st.stop()
+
+target_model_name = ""
+for preferred in ['gemini-1.5-flash', 'gemini-1.5-pro', 'gemini-pro-vision', 'gemini-pro']:
+    if preferred in available_models:
+        target_model_name = preferred
+        break
+
+if not target_model_name and available_models:
+    target_model_name = available_models[0] 
+
+# 🚀 찾아낸 모델로 AI 엔진 객체 생성
+model = genai.GenerativeModel(target_model_name)
+st.sidebar.caption(f"🤖 가동 엔진: {target_model_name}")
 
 st.markdown(f"""
     <div class="premium-header">
@@ -224,9 +230,9 @@ with col1:
                     user_db.at[idx, 'usage_count'] += 1; save_db(user_db); st.rerun()
                 except Exception as e:
                     if "ResourceExhausted" in str(e) or "429" in str(e):
-                        st.error("⏳ 구글 AI 서버의 사용 한도(Quota)를 초과했습니다. 잠시 후 다시 시도해 주세요.")
+                        st.error("⏳ 구글 AI 서버의 분당/일일 사용 한도(Quota)를 초과했습니다. 약 1~2분 정도 완전히 기다리신 후 딱 한 번만 다시 클릭해 주세요.")
                     else:
-                        st.error(f"⚠️ 트래픽이 많아 AI 엔진 연결이 지연되고 있습니다: {e}")
+                        st.error(f"⚠️ 트래픽 지연 발생: {e}")
 
     if 'suggestions' in st.session_state:
         st.success(st.session_state.suggestions)
@@ -263,7 +269,7 @@ with col2:
                     user_db.at[idx, 'usage_count'] += 1; save_db(user_db); st.rerun()
                 except Exception as e:
                     if "ResourceExhausted" in str(e) or "429" in str(e):
-                        st.error("⏳ 리포트 생성에 필요한 자원 한도를 초과했습니다. 잠시 후 다시 시도해 주세요.")
+                        st.error("⏳ 서버 사용 한도를 초과했습니다. 리포트 생성은 자원을 많이 소모하므로, 2분 정도 기다렸다가 다시 시도해 주세요.")
                     else:
                         st.error(f"⚠️ 오류가 발생했습니다: {e}")
 
