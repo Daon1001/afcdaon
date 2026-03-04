@@ -22,12 +22,13 @@ custom_css = """
         background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%) !important;
     }
     
-    /* 중앙 로그인 박스 레이아웃 (스크롤 최소화) */
+    /* 중앙 로그인 박스 레이아웃 (스크롤 방지를 위해 상단으로 밀착) */
     .login-container {
         display: flex !important;
         justify-content: center !important;
-        align-items: center !important;
-        min-height: 80vh !important;
+        align-items: flex-start !important; /* 상단 정렬로 변경 */
+        padding-top: 5vh !important; /* 상단 여백을 대폭 줄임 */
+        min-height: 100vh !important;
     }
     
     .login-box {
@@ -60,6 +61,17 @@ custom_css = """
         text-align: center !important;
         margin-bottom: 2rem !important;
     }
+    
+    /* 리포트 카드 디자인 */
+    .report-card {
+        background-color: white !important;
+        padding: 20px !important;
+        border-radius: 8px !important;
+        line-height: 1.8 !important;
+        border: 1px solid #e0e0e0 !important;
+        border-left: 6px solid #0b1f52 !important;
+        margin-bottom: 10px !important;
+    }
 </style>
 """
 st.markdown(custom_css, unsafe_allow_html=True)
@@ -89,15 +101,14 @@ if 'authenticated_user' not in st.session_state: st.session_state.authenticated_
 if 'uploader_key' not in st.session_state: st.session_state.uploader_key = "1"
 MAX_MONTHLY_LIMIT = 30 
 
-# --- [2. 중앙 집중형 로그인 화면 구현 (이미지 제거 및 텍스트 로고 적용)] ---
+# --- [2. 중앙 집중형 로그인 화면 구현 (텍스트 로고 & 스크롤 제거)] ---
 if st.session_state.authenticated_user is None:
     _, col_mid, _ = st.columns([0.5, 1, 0.5])
     
     with col_mid:
-        st.write("##") # 상단 여백
         st.markdown('<div class="login-container"><div class="login-box">', unsafe_allow_html=True)
         
-        # 🚀 이미지 제거 후 깔끔한 텍스트 기반 로고 배치
+        # 🚀 이미지 없이 텍스트로만 깔끔하게 구성
         st.markdown('<div class="login-title">🏛️ 중소기업경영지원단</div>', unsafe_allow_html=True)
         st.markdown("<p style='color:#666; font-size:1.1rem; margin-bottom: 30px;'>벤처인증 AI 마스터 컨설턴트 로그인</p>", unsafe_allow_html=True)
         
@@ -187,15 +198,20 @@ with col1:
     user_guide_rec = st.text_area("💡 추천 가이드", placeholder="예: ESG 강조", key=f"gr_{st.session_state.uploader_key}")
     
     if st.button("AI 기술 주제 추천 ✨"):
-        with st.spinner('분석 중...'):
-            prompt = f"[{biz_type}] 벤처 기술 주제 3개 추천. {user_guide_rec}"
-            content = [prompt, analysis_image] if analysis_image else prompt
-            try:
-                response = model.generate_content(content)
-                st.session_state.suggestions = response.text
-                user_db.at[idx, 'usage_count'] += 1; save_db(user_db); st.rerun()
-            except Exception as e:
-                st.error("⏳ 트래픽이 많아 AI 엔진 연결이 지연되고 있습니다. 잠시 후 다시 시도해 주세요.")
+        if user_db.at[idx, 'usage_count'] >= MAX_MONTHLY_LIMIT: st.error("한도 초과")
+        else:
+            with st.spinner('분석 중...'):
+                prompt = f"[{biz_type}] 벤처 기술 주제 3개 추천. {user_guide_rec}"
+                content = [prompt, analysis_image] if analysis_image else prompt
+                try:
+                    response = model.generate_content(content)
+                    st.session_state.suggestions = response.text
+                    user_db.at[idx, 'usage_count'] += 1; save_db(user_db); st.rerun()
+                except Exception as e:
+                    if "ResourceExhausted" in str(e) or "429" in str(e):
+                        st.error("⏳ 구글 AI 서버의 사용 한도(Quota)를 초과했습니다. 잠시 후 다시 시도해 주세요.")
+                    else:
+                        st.error(f"⚠️ 트래픽이 많아 AI 엔진 연결이 지연되고 있습니다: {e}")
 
     if 'suggestions' in st.session_state:
         st.success(st.session_state.suggestions)
@@ -207,6 +223,7 @@ with col2:
     
     if st.button("마스터 리포트 생성 🚀", type="primary"):
         if not selected_topic: st.warning("기술명을 입력하세요.")
+        elif user_db.at[idx, 'usage_count'] >= MAX_MONTHLY_LIMIT: st.error("한도 초과")
         else:
             with st.spinner('리포트 생성 중...'):
                 form_prompt = f"""
@@ -230,7 +247,10 @@ with col2:
                     st.session_state.report_sections = response.text.split('### ')
                     user_db.at[idx, 'usage_count'] += 1; save_db(user_db); st.rerun()
                 except Exception as e:
-                    st.error("⏳ 리포트 생성에 필요한 자원 한도를 초과했습니다. 잠시 후 다시 시도해 주세요.")
+                    if "ResourceExhausted" in str(e) or "429" in str(e):
+                        st.error("⏳ 리포트 생성에 필요한 자원 한도를 초과했습니다. 잠시 후 다시 시도해 주세요.")
+                    else:
+                        st.error(f"⚠️ 오류가 발생했습니다: {e}")
 
 if 'report_sections' in st.session_state:
     st.divider()
@@ -238,6 +258,8 @@ if 'report_sections' in st.session_state:
     st.download_button("💾 전체 리포트 다운로드", full_report, file_name=f"벤처리포트_{selected_topic}.txt")
     for section in st.session_state.report_sections:
         if section.strip():
-            title = section.split('\n', 1)[0].strip('[] ')
+            lines = section.split('\n', 1)
+            title = lines[0].strip('[] ')
+            body = lines[1] if len(lines) > 1 else ""
             with st.expander(f"📌 {title}", expanded=False):
-                st.write(section)
+                st.markdown(f'<div class="report-card">{body.replace("\n", "<br>")}</div>', unsafe_allow_html=True)
