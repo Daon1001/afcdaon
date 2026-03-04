@@ -6,7 +6,7 @@ import pandas as pd
 import os
 from datetime import datetime, date
 
-# PDF 처리를 위한 라이브러리
+# PDF 처리를 위한 라이브러리 (배포 시 packages.txt 필수)
 try:
     from pdf2image import convert_from_bytes
 except ImportError:
@@ -17,17 +17,17 @@ st.set_page_config(page_title="벤처인증 AI 마스터 컨설턴트", layout="
 
 custom_css = """
 <style>
-    /* 배경 그라데이션 */
+    /* 배경 그라데이션 강제 적용 */
     .stApp {
         background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%) !important;
     }
     
-    /* 중앙 로그인 박스 레이아웃 */
+    /* 중앙 로그인 박스 레이아웃 (스크롤 최소화) */
     .login-container {
         display: flex !important;
         justify-content: center !important;
         align-items: flex-start !important;
-        padding-top: 30px !important;
+        padding-top: 20px !important;
         min-height: 100vh !important;
     }
     
@@ -56,7 +56,6 @@ custom_css = """
         color: #0b1f52 !important;
         font-weight: 800 !important;
         font-size: 24px !important;
-        margin-top: 5px !important;
     }
 
     /* 대시보드 내부 프리미엄 헤더 */
@@ -102,9 +101,7 @@ def load_db():
         ])
         initial_data.to_csv(DB_FILE, index=False)
         return initial_data
-    
     df = pd.read_csv(DB_FILE)
-    # 구형 DB 자동 복구
     for col in ['usage_count', 'last_month', 'created_at', 'approved', 'is_admin']:
         if col not in df.columns:
             df[col] = 0 if 'count' in col else (date.today().month if 'month' in col else False)
@@ -120,10 +117,9 @@ if 'authenticated_user' not in st.session_state:
     st.session_state.authenticated_user = None
 if 'uploader_key' not in st.session_state:
     st.session_state.uploader_key = "1"
-
 MAX_MONTHLY_LIMIT = 30 
 
-# --- [2. 중앙 집중형 로그인 화면 (네이버/STOVE 스타일)] ---
+# --- [2. 중앙 집중형 로그인 화면] ---
 if st.session_state.authenticated_user is None:
     _, col_mid, _ = st.columns([0.5, 1, 0.5])
     with col_mid:
@@ -151,7 +147,7 @@ if st.session_state.authenticated_user is None:
         st.markdown('</div></div>', unsafe_allow_html=True)
     st.stop()
 
-# --- [3. 메인 대시보드 및 동적 AI 엔진 연결] ---
+# --- [3. 메인 대시보드 및 🚀 동적 AI 제어 시스템] ---
 with st.sidebar:
     st.success(f"👤 접속: {st.session_state.authenticated_user}")
     if st.button("로그아웃", use_container_width=True):
@@ -160,29 +156,29 @@ with st.sidebar:
     idx = user_db[user_db['email'] == st.session_state.authenticated_user].index[0]
     st.write(f"📊 월 사용량: {user_db.at[idx, 'usage_count']} / {MAX_MONTHLY_LIMIT}")
 
-# 🚀 [에러 해결] 동적 모델 매칭 시스템
+# 🚀 동적 제어 로직: 가용한 모델을 실시간 검색하여 자동 연결
 try:
     API_KEY = st.secrets["gemini_api_key"]
     genai.configure(api_key=API_KEY)
     
-    # 접근 가능한 모든 모델 리스트를 실시간으로 확인
-    model_list = [m.name for m in genai.list_models() if 'generateContent' in m.supported_generation_methods]
+    # 1. 사용 가능한 모델 리스트 확보
+    models = [m.name for m in genai.list_models() if 'generateContent' in m.supported_generation_methods]
     
-    # 우선순위에 따른 자동 모델 선택 (models/ 접두사 중복 방지)
-    selected_model_path = ""
-    for preferred in ["gemini-1.5-flash", "gemini-1.5-pro", "gemini-pro"]:
-        matching = [m for m in model_list if preferred in m]
-        if matching:
-            selected_model_path = matching[0]
+    # 2. 우선순위 모델 자동 매칭 (NotFound 방지)
+    selected_model = ""
+    for target in ["gemini-1.5-flash", "gemini-1.5-pro", "gemini-pro"]:
+        match = [m for m in models if target in m]
+        if match:
+            selected_model = match[0]
             break
             
-    if not selected_model_path and model_list:
-        selected_model_path = model_list[0]
+    if not selected_model and models:
+        selected_model = models[0]
         
-    model = genai.GenerativeModel(selected_model_path)
-    st.sidebar.caption(f"🤖 가동 엔진: {selected_model_path.split('/')[-1]}")
+    model = genai.GenerativeModel(selected_model)
+    st.sidebar.caption(f"🤖 시스템 가동 엔진: {selected_model.replace('models/', '')}")
 except Exception as e:
-    st.error(f"⚠️ AI 엔진 연결 실패: {e}"); st.stop()
+    st.error(f"⚠️ AI 엔진 동적 제어 실패: {e}"); st.stop()
 
 st.markdown("""
     <div class="premium-header">
@@ -212,16 +208,15 @@ with col1:
             except: st.error("PDF 변환 오류")
         else: analysis_image = Image.open(uploaded_file)
         
-    user_guide_rec = st.text_area("💡 추천 가이드", placeholder="예: ESG 강조", key=f"gr_{st.session_state.uploader_key}")
+    user_guide_rec = st.text_area("💡 추천 가이드라인", placeholder="예: 특정 소재 강조", key=f"gr_{st.session_state.uploader_key}")
     
     if st.button("AI 기술 주제 추천 ✨"):
         if user_db.at[idx, 'usage_count'] >= MAX_MONTHLY_LIMIT: st.error("한도 초과")
         else:
             with st.spinner('분석 중...'):
                 prompt = f"[{biz_type}] 벤처 기술 주제 3개 추천. {user_guide_rec}"
-                inputs = [prompt, analysis_image] if analysis_image else [prompt]
-                # 🚀 line 198 (또는 200번대) 에러 해결을 위해 명시적 호출
-                response = model.generate_content(inputs)
+                # 🚀 동적 제어가 적용된 모델 호출
+                response = model.generate_content([prompt, analysis_image] if analysis_image else prompt)
                 st.session_state.suggestions = response.text
                 user_db.at[idx, 'usage_count'] += 1; save_db(user_db); st.rerun()
 
@@ -237,9 +232,8 @@ with col2:
         if not selected_topic: st.warning("기술명을 입력하세요.")
         else:
             with st.spinner('리포트 생성 중...'):
-                # 🚀 11개 항목 전체 프롬프트 (요약 절대 금지)
                 form_prompt = f"""
-                당신은 대한민국 최고의 벤처인증 전문 컨설턴트입니다. 신청기술 [{selected_topic}]에 대해 11개 항목 리포트를 작성하세요.
+                당신은 대한민국 최고의 벤처인증 전문 컨설턴트입니다. [{selected_topic}]에 대해 11개 항목 리포트를 작성하세요.
                 시장 데이터는 실제 기반 숫자를 사용하고 지어내지 마세요. V자 요약 양식 필수 포함. {user_guide_rep}
                 ### [1. 신청기술 요약 및 표준 양식]
                 ### [2. 개발배경 및 원인분석]
@@ -253,20 +247,16 @@ with col2:
                 ### [10. 자금조달 계획의 구체적 방안]
                 ### [11. 연계 가능 정책자금 추천]
                 """
-                inputs = [form_prompt, analysis_image] if analysis_image else [form_prompt]
-                response = model.generate_content(inputs)
+                response = model.generate_content([form_prompt, analysis_image] if analysis_image else form_prompt)
                 st.session_state.report_sections = response.text.split('### ')
                 user_db.at[idx, 'usage_count'] += 1; save_db(user_db); st.rerun()
 
-# --- [5. 결과 출력] ---
 if 'report_sections' in st.session_state:
     st.divider()
     full_report = "\n\n".join(st.session_state.report_sections)
     st.download_button("💾 전체 리포트 다운로드", full_report, file_name=f"벤처리포트_{selected_topic}.txt")
     for section in st.session_state.report_sections:
         if section.strip():
-            lines = section.split('\n', 1)
-            title = lines[0].strip('[] ')
-            body = lines[1] if len(lines) > 1 else ""
+            title = section.split('\n', 1)[0].strip('[] ')
             with st.expander(f"📌 {title}", expanded=False):
-                st.markdown(f'<div class="report-card">{body.replace("\n", "<br>")}</div>', unsafe_allow_html=True)
+                st.write(section)
