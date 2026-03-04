@@ -3,6 +3,7 @@ import google.generativeai as genai
 from PIL import Image
 import io
 import pandas as pd
+import os
 from datetime import datetime, date
 
 # PDF 처리를 위한 라이브러리 (배포 시 packages.txt 필수)
@@ -11,29 +12,39 @@ try:
 except ImportError:
     pass
 
-# --- [0. 페이지 설정] ---
+# --- [0. 페이지 설정 및 CSV DB 설정] ---
 st.set_page_config(page_title="벤처인증 AI 마스터 컨설턴트", layout="wide")
 
-# --- [1. 시스템 초기화 및 세션 상태 관리] ---
-if 'user_db' not in st.session_state:
-    # 관리자 계정 설정
-    st.session_state.user_db = pd.DataFrame([
-        {"email": "incheon00@gmail.com", "approved": True, "is_admin": True, "created_at": "2026-02-14", "usage_count": 0, "last_month": date.today().month},
-        {"email": "임원근@gmail.com", "approved": True, "is_admin": True, "created_at": "2026-02-14", "usage_count": 0, "last_month": date.today().month},
-        {"email": "01092541128@gmail.com", "approved": True, "is_admin": True, "created_at": "2026-02-26", "usage_count": 0, "last_month": date.today().month}
-    ])
+DB_FILE = "users.csv"
 
+def load_db():
+    if not os.path.exists(DB_FILE):
+        initial_data = pd.DataFrame([
+            {"email": "incheon00@gmail.com", "approved": True, "is_admin": True, "created_at": "2026-02-14", "usage_count": 0, "last_month": date.today().month},
+            {"email": "임원근@gmail.com", "approved": True, "is_admin": True, "created_at": "2026-02-14", "usage_count": 0, "last_month": date.today().month},
+            {"email": "01092541128@gmail.com", "approved": True, "is_admin": True, "created_at": "2026-02-26", "usage_count": 0, "last_month": date.today().month}
+        ])
+        initial_data.to_csv(DB_FILE, index=False)
+        return initial_data
+    return pd.read_csv(DB_FILE)
+
+def save_db(df):
+    df.to_csv(DB_FILE, index=False)
+
+# 페이지 로드 시 최신 DB 읽어오기
+user_db = load_db()
+
+# --- [1. 시스템 초기화 및 세션 상태 관리] ---
 if 'authenticated_user' not in st.session_state:
     st.session_state.authenticated_user = None
 
-# 파일 업로더 초기화를 위한 키
 if 'uploader_key' not in st.session_state:
     st.session_state.uploader_key = "1"
 
 # 📊 월간 횟수 제한 설정
-MAX_MONTHLY_LIMIT = 100 
+MAX_MONTHLY_LIMIT = 30 
 
-# --- [2. 사이드바: 로그인 및 승인 신청 시스템] ---
+# --- [2. 사이드바: 로그인 및 승인 신청 시스템 (DB 연동)] ---
 with st.sidebar:
     st.title("🔐 접근 제어")
     
@@ -42,7 +53,7 @@ with st.sidebar:
         col_login, col_req = st.columns(2)
         
         if col_login.button("로그인", use_container_width=True, type="primary"):
-            user_row = st.session_state.user_db[st.session_state.user_db['email'] == login_email]
+            user_row = user_db[user_db['email'] == login_email]
             if not user_row.empty:
                 if user_row.iloc[0]['approved']:
                     st.session_state.authenticated_user = login_email
@@ -56,17 +67,18 @@ with st.sidebar:
             if not login_email:
                 st.error("이메일을 입력해주세요.")
             else:
-                user_row = st.session_state.user_db[st.session_state.user_db['email'] == login_email]
+                user_row = user_db[user_db['email'] == login_email]
                 if user_row.empty:
-                    new_user = {
+                    new_user = pd.DataFrame([{
                         "email": login_email, 
                         "approved": False, 
                         "is_admin": False, 
                         "created_at": datetime.now().strftime("%Y-%m-%d"),
                         "usage_count": 0,
                         "last_month": date.today().month
-                    }
-                    st.session_state.user_db = pd.concat([st.session_state.user_db, pd.DataFrame([new_user])], ignore_index=True)
+                    }])
+                    user_db = pd.concat([user_db, new_user], ignore_index=True)
+                    save_db(user_db)
                     st.info("📩 승인 신청 완료! 관리자에게 승인을 요청하세요.")
                 else:
                     st.warning("이미 등록(신청)된 이메일입니다.")
@@ -76,17 +88,18 @@ with st.sidebar:
             st.session_state.authenticated_user = None
             st.rerun()
 
-    # 사용량 표시 UI
+    # 사용량 표시 UI 및 월간 초기화
     if st.session_state.authenticated_user:
         st.divider()
-        idx = st.session_state.user_db[st.session_state.user_db['email'] == st.session_state.authenticated_user].index[0]
+        idx = user_db[user_db['email'] == st.session_state.authenticated_user].index[0]
         
         current_month = date.today().month
-        if st.session_state.user_db.at[idx, 'last_month'] != current_month:
-            st.session_state.user_db.at[idx, 'usage_count'] = 0
-            st.session_state.user_db.at[idx, 'last_month'] = current_month
+        if user_db.at[idx, 'last_month'] != current_month:
+            user_db.at[idx, 'usage_count'] = 0
+            user_db.at[idx, 'last_month'] = current_month
+            save_db(user_db)
             
-        user_usage = st.session_state.user_db.at[idx, 'usage_count']
+        user_usage = user_db.at[idx, 'usage_count']
         remaining = MAX_MONTHLY_LIMIT - user_usage
         st.caption("🛡️ 개인별 월간 사용량")
         st.write(f"나의 사용량: **{user_usage} / {MAX_MONTHLY_LIMIT}**")
@@ -102,7 +115,6 @@ try:
     API_KEY = st.secrets["gemini_api_key"]
     genai.configure(api_key=API_KEY)
     
-    # 동적 모델 할당
     available_models = []
     for m in genai.list_models():
         if 'generateContent' in m.supported_generation_methods:
@@ -123,19 +135,22 @@ except Exception as e:
     st.error(f"⚠️ API 연결 오류: {e}")
     st.stop()
 
-# --- [4. 관리자 전용: 사용자 승인 제어판] ---
-user_idx = st.session_state.user_db[st.session_state.user_db['email'] == st.session_state.authenticated_user].index[0]
-if st.session_state.user_db.at[user_idx, 'is_admin']:
+# --- [4. 관리자 전용: 사용자 승인 제어판 (DB 연동)] ---
+user_idx = user_db[user_db['email'] == st.session_state.authenticated_user].index[0]
+if user_db.at[user_idx, 'is_admin']:
     with st.expander("👑 관리자 전용: 사용자 승인 및 관리", expanded=False):
-        st.dataframe(st.session_state.user_db, use_container_width=True)
-        target_email = st.selectbox("승인/해제 대상 선택", st.session_state.user_db['email'])
+        # 최신 DB 정보를 보여줍니다. 동료가 신청하면 새로고침 시 여기에 뜹니다.
+        st.dataframe(user_db, use_container_width=True)
+        target_email = st.selectbox("승인/해제 대상 선택", user_db['email'])
         c1, c2 = st.columns(2)
         if c1.button("✅ 승인 처리", use_container_width=True):
-            st.session_state.user_db.loc[st.session_state.user_db['email'] == target_email, 'approved'] = True
+            user_db.loc[user_db['email'] == target_email, 'approved'] = True
+            save_db(user_db)
             st.success(f"{target_email} 승인 완료!")
             st.rerun()
         if c2.button("🚫 승인 해제", use_container_width=True):
-            st.session_state.user_db.loc[st.session_state.user_db['email'] == target_email, 'approved'] = False
+            user_db.loc[user_db['email'] == target_email, 'approved'] = False
+            save_db(user_db)
             st.rerun()
 
 # --- [5. 메인 UI (타이틀 및 초기화 버튼)] ---
@@ -143,13 +158,11 @@ col_title, col_reset = st.columns([8, 2])
 with col_title:
     st.title("🏛️ 벤처인증 통합 컨설팅 대시보드")
 with col_reset:
-    st.write("") # 버튼 위치 조정을 위한 여백
+    st.write("") 
     if st.button("🔄 새 기업 컨설팅 시작 (초기화)", use_container_width=True, type="secondary"):
-        # 생성된 데이터 완전 삭제
         for key in ['suggestions', 'report_sections']:
             if key in st.session_state:
                 del st.session_state[key]
-        # 파일 업로더 초기화를 위해 고유 키 값을 변경
         st.session_state.uploader_key = str(int(st.session_state.uploader_key) + 1)
         st.rerun()
 
@@ -165,7 +178,6 @@ with col1:
         horizontal=False
     )
     
-    # uploader_key를 사용하여 초기화 시 파일도 함께 비워지도록 설정
     uploaded_file = st.file_uploader("사업자등록증 업로드 (JPG, PNG, PDF)", type=["jpg", "png", "jpeg", "pdf"], key=st.session_state.uploader_key)
     analysis_image = None
     
@@ -219,9 +231,8 @@ with col1:
         
         suggestion_placeholder = st.empty()
 
-        # 첫 번째 추천 버튼
         if st.button("AI 기술 주제 추천받기"):
-            if st.session_state.user_db.at[user_idx, 'usage_count'] >= MAX_MONTHLY_LIMIT:
+            if user_db.at[user_idx, 'usage_count'] >= MAX_MONTHLY_LIMIT:
                 st.error("이번 달 사용 횟수를 초과했습니다.")
             else:
                 with st.spinner('종목 분석 및 기술 추천 중...'):
@@ -236,15 +247,15 @@ with col1:
                     """
                     response = model.generate_content([recommend_prompt, analysis_image])
                     st.session_state.suggestions = response.text
-                    st.session_state.user_db.at[user_idx, 'usage_count'] += 1
+                    user_db.at[user_idx, 'usage_count'] += 1
+                    save_db(user_db)
                     st.rerun()
 
-        # 추천 결과 표시 및 재추천 버튼
         if 'suggestions' in st.session_state and st.session_state.suggestions:
             suggestion_placeholder.success(st.session_state.suggestions)
             
             if st.button("🔄 다른 기술 주제 더 보기"):
-                if st.session_state.user_db.at[user_idx, 'usage_count'] >= MAX_MONTHLY_LIMIT:
+                if user_db.at[user_idx, 'usage_count'] >= MAX_MONTHLY_LIMIT:
                     st.error("이번 달 사용 횟수를 초과했습니다.")
                 else:
                     suggestion_placeholder.empty()
@@ -263,7 +274,8 @@ with col1:
                         """
                         response = model.generate_content([retry_prompt, analysis_image])
                         st.session_state.suggestions = response.text
-                        st.session_state.user_db.at[user_idx, 'usage_count'] += 1
+                        user_db.at[user_idx, 'usage_count'] += 1
+                        save_db(user_db)
                         st.rerun()
 
 with col2:
@@ -271,7 +283,7 @@ with col2:
     selected_topic = st.text_input("신청기술명 입력:", placeholder="기술명을 입력하거나 왼쪽에서 복사하세요.")
     
     if st.button("마스터 리포트 생성 🚀", type="primary"):
-        if st.session_state.user_db.at[user_idx, 'usage_count'] >= MAX_MONTHLY_LIMIT:
+        if user_db.at[user_idx, 'usage_count'] >= MAX_MONTHLY_LIMIT:
             st.error("이번 달 사용 횟수를 초과했습니다.")
         elif not selected_topic:
             st.warning("기술명을 입력해 주세요.")
@@ -313,7 +325,8 @@ with col2:
                     report_text = response.text
                     sections = report_text.split('### ')
                     st.session_state.report_sections = [s for s in sections if s.strip()]
-                    st.session_state.user_db.at[user_idx, 'usage_count'] += 1
+                    user_db.at[user_idx, 'usage_count'] += 1
+                    save_db(user_db)
                     st.rerun()
                 except Exception as e:
                     st.error(f"오류: {e}")
