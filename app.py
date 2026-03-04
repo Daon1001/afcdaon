@@ -12,62 +12,63 @@ try:
 except ImportError:
     pass
 
-# --- [0. 페이지 설정 및 디자인 완전 강제 적용 CSS] ---
+# --- [0. 페이지 설정 및 초강력 디자인 CSS] ---
 st.set_page_config(page_title="벤처인증 AI 마스터 컨설턴트", layout="wide")
 
-# 디자인이 절대 씹히지 않도록 초강력 CSS 적용
 custom_css = """
 <style>
-    /* 1. 배경 그라데이션 강제 적용 */
+    /* 배경 그라데이션 강제 적용 */
     .stApp {
         background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%) !important;
     }
     
-    /* 2. 중앙 로그인 박스 레이아웃 (높이와 간격 조정) */
+    /* 중앙 로그인 박스 레이아웃 */
     .login-container {
         display: flex !important;
         justify-content: center !important;
         align-items: center !important;
-        min-height: 80vh !important;
+        min-height: 85vh !important;
     }
     
     .login-box {
         background-color: white !important;
-        padding: 30px !important;
+        padding: 20px !important; /* 내부 여백 축소로 이미지 부각 */
         border-radius: 20px !important;
-        box-shadow: 0 20px 40px rgba(0, 0, 0, 0.2) !important;
+        box-shadow: 0 20px 50px rgba(0, 0, 0, 0.25) !important;
         text-align: center !important;
-        max-width: 500px !important;
+        max-width: 550px !important;
         width: 100% !important;
         border-top: 10px solid #0b1f52 !important;
     }
 
-    /* 3. 이미지(확인서)를 로고처럼 꽉 채우기 - 잘림 및 작게 보임 방지 */
+    /* 🚀 이미지 강제 확장 로직: 가로를 꽉 채우고 위아래 잘림 방지 */
+    [data-testid="stImage"] {
+        display: flex !important;
+        justify-content: center !important;
+    }
+    
     [data-testid="stImage"] > img {
-        width: 100% !important;
+        width: 100% !important; /* 가로 꽉 채우기 */
+        min-width: 100% !important;
         height: auto !important;
-        max-height: 350px !important;
-        object-fit: cover !important; /* 이미지 비율을 맞추며 꽉 채움 */
-        border-radius: 12px !important;
-        margin-bottom: 20px !important;
-        border: 1px solid #eee !important;
+        border-radius: 10px !important;
+        margin-bottom: 10px !important;
     }
 
     .login-title {
         color: #0b1f52 !important;
         font-weight: 800 !important;
-        font-size: 28px !important;
-        margin-top: 10px !important;
+        font-size: 30px !important;
+        margin: 15px 0 5px 0 !important;
     }
 
-    /* 4. 대시보드 내부 프리미엄 헤더 */
     .premium-header {
         background: linear-gradient(135deg, #0b1f52 0%, #1a3673 100%) !important;
         color: white !important;
         padding: 2rem !important;
         border-radius: 15px !important;
         border-bottom: 5px solid #d4af37 !important;
-        text-align: center !important;
+        text-align: center;
     }
 </style>
 """
@@ -98,27 +99,25 @@ if 'authenticated_user' not in st.session_state: st.session_state.authenticated_
 if 'uploader_key' not in st.session_state: st.session_state.uploader_key = "1"
 MAX_MONTHLY_LIMIT = 30 
 
-# --- [2. 중앙 집중형 로그인 화면 구현] ---
+# --- [2. 중앙 집중형 로그인 화면] ---
 if st.session_state.authenticated_user is None:
-    # 화면 정중앙 배치를 위해 컬럼 비율 조정
-    _, col_mid, _ = st.columns([0.5, 1, 0.5])
+    _, col_mid, _ = st.columns([0.4, 1.2, 0.4])
     
     with col_mid:
-        st.write("##") # 상단 여백
-        # HTML div로 박스 시작
+        st.markdown('<div class="login-container">', unsafe_allow_html=True)
         st.markdown('<div class="login-box">', unsafe_allow_html=True)
         
-        # 🚀 확인서 이미지 (파일명: venture_cert.png 가 폴더에 있어야 함)
+        # 🚀 이미지 표시 로직
         try:
             logo = Image.open("venture_cert.png")
-            st.image(logo)
+            st.image(logo, use_container_width=True)
         except:
             st.markdown("<h2 style='color:#0b1f52;'>🏛️ 중소기업경영지원단</h2>", unsafe_allow_html=True)
         
         st.markdown('<div class="login-title">중소기업경영지원단</div>', unsafe_allow_html=True)
-        st.markdown("<p style='color:#666; margin-bottom: 25px;'>벤처인증 AI 마스터 컨설턴트 로그인</p>", unsafe_allow_html=True)
+        st.markdown("<p style='color:#666; font-size: 1.1rem;'>벤처인증 AI 마스터 컨설턴트 로그인</p>", unsafe_allow_html=True)
         
-        login_email = st.text_input("이메일 입력", placeholder="example@gmail.com", label_visibility="collapsed").strip().lower()
+        login_email = st.text_input("이메일", placeholder="example@gmail.com", label_visibility="collapsed").strip().lower()
         
         st.write("")
         b_col1, b_col2 = st.columns(2)
@@ -136,13 +135,10 @@ if st.session_state.authenticated_user is None:
                 st.success("📩 신청 완료!")
             else: st.warning("이미 신청됨")
             
-        st.markdown('</div>', unsafe_allow_html=True)
+        st.markdown('</div></div>', unsafe_allow_html=True)
     st.stop()
 
-# =====================================================================
-# 로그인 성공 후 메인 페이지
-# =====================================================================
-
+# --- [3. 메인 대시보드 (로그인 후)] ---
 with st.sidebar:
     st.success(f"👤 접속: {st.session_state.authenticated_user}")
     if st.button("로그아웃", use_container_width=True):
@@ -186,11 +182,11 @@ with col1:
             except: st.error("PDF 변환 오류")
         else: analysis_image = Image.open(uploaded_file)
         
-    user_guide_rec = st.text_area("💡 추천 가이드", placeholder="예: ESG 강조", key=f"gr_{st.session_state.uploader_key}")
+    user_guide_rec = st.text_area("💡 추천 가이드", placeholder="예: 특정 소재 강조", key=f"gr_{st.session_state.uploader_key}")
     
     if st.button("AI 기술 주제 추천 ✨"):
         with st.spinner('분석 중...'):
-            prompt = f"[{biz_type}] 벤처 기술 주제 3개 추천. {user_guide_rec}"
+            prompt = f"[{biz_type}] 벤처 기술 주제 추천. {user_guide_rec}"
             content = [prompt, analysis_image] if analysis_image else prompt
             response = model.generate_content(content)
             st.session_state.suggestions = response.text
@@ -201,7 +197,7 @@ with col1:
 
 with col2:
     st.subheader("2️⃣ 마스터 리포트 생성")
-    selected_topic = st.text_input("확정 기술명", placeholder="기술명을 입력하세요.", key=f"topic_{st.session_state.uploader_key}")
+    selected_topic = st.text_input("확정 기술명", placeholder="기술명 입력", key=f"topic_{st.session_state.uploader_key}")
     user_guide_rep = st.text_area("💡 리포트 지시사항", placeholder="시장 숫자 등", key=f"gp_{st.session_state.uploader_key}")
     
     if st.button("마스터 리포트 생성 🚀", type="primary"):
@@ -210,7 +206,7 @@ with col2:
             with st.spinner('리포트 생성 중...'):
                 form_prompt = f"""
                 당신은 20년 경력의 벤처컨설턴트입니다. [{selected_topic}]에 대해 11개 항목 리포트를 작성하세요.
-                V자 요약 양식 필수 포함. 지어낸 숫자 금지. {user_guide_rep}
+                V자 요약 양식 필수. 허구 숫자 금지. {user_guide_rep}
                 ### [1. 신청기술 요약 및 표준 양식]
                 ### [2. 개발배경 및 원인분석]
                 ### [3. 경쟁력 확보방안]
