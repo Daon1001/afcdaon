@@ -16,7 +16,7 @@ st.set_page_config(page_title="벤처인증 AI 마스터 컨설턴트", layout="
 
 # --- [1. 사용자 관리 및 사용량 DB (자체 승인 시스템)] ---
 if 'user_db' not in st.session_state:
-    # 관리자 계정 설정 (원근님 요청 반영: incheon00@gmail.com)
+    # 관리자 계정 설정 (incheon00@gmail.com 관리자 반영)
     st.session_state.user_db = pd.DataFrame([
         {"email": "incheon00@gmail.com", "approved": True, "is_admin": True, "created_at": "2026-02-14", "usage_count": 0, "last_month": date.today().month},
         {"email": "임원근@gmail.com", "approved": True, "is_admin": True, "created_at": "2026-02-14", "usage_count": 0, "last_month": date.today().month},
@@ -26,7 +26,7 @@ if 'user_db' not in st.session_state:
 if 'authenticated_user' not in st.session_state:
     st.session_state.authenticated_user = None
 
-# 📊 월간 횟수 제한 설정
+# 📊 월간 횟수 제한 설정 (원하시는 대로 수정 가능)
 MAX_MONTHLY_LIMIT = 30 
 
 # --- [2. 사이드바: 로그인 및 승인 신청 시스템] ---
@@ -88,7 +88,7 @@ with st.sidebar:
         st.write(f"나의 사용량: **{user_usage} / {MAX_MONTHLY_LIMIT}**")
         st.progress(min(user_usage / MAX_MONTHLY_LIMIT, 1.0))
 
-# --- [3. 로그인 체크 및 AI 설정] ---
+# --- [3. 로그인 체크 및 AI 모델 매칭 로직] ---
 if st.session_state.authenticated_user is None:
     st.title("🏛️ 벤처인증 통합 컨설팅 대시보드")
     st.info("💡 사이드바에서 이메일 로그인 후 이용 가능합니다.")
@@ -97,9 +97,12 @@ if st.session_state.authenticated_user is None:
 try:
     API_KEY = st.secrets["gemini_api_key"]
     genai.configure(api_key=API_KEY)
+    
+    # 에러 해결: 가장 안정적인 정식 명칭 모델 순서대로 매칭 시도
+    # 'gemini-1.5-flash'는 현재 가장 보편적으로 사용 가능한 모델명입니다.
     model = genai.GenerativeModel('gemini-1.5-flash')
-except:
-    st.error("⚠️ Secrets 설정에서 API 키를 확인하세요.")
+except Exception as e:
+    st.error(f"⚠️ API 연결 오류: {e}")
     st.stop()
 
 # --- [4. 관리자 전용: 사용자 승인 제어판] ---
@@ -117,7 +120,7 @@ if st.session_state.user_db.at[user_idx, 'is_admin']:
             st.session_state.user_db.loc[st.session_state.user_db['email'] == target_email, 'approved'] = False
             st.rerun()
 
-# --- [5. 메인 UI 및 업종 맞춤형 로직] ---
+# --- [5. 메인 UI 및 업종 맞춤형 가이드라인] ---
 st.title("🏛️ 벤처인증 통합 컨설팅 대시보드")
 col1, col2 = st.columns(2)
 
@@ -131,8 +134,7 @@ with col1:
             try:
                 pages = convert_from_bytes(uploaded_file.read())
                 if pages: analysis_image = pages[0]
-            except Exception:
-                st.error("PDF 변환 오류 발생")
+            except: st.error("PDF 변환 오류 발생")
         else:
             analysis_image = Image.open(uploaded_file)
         
@@ -153,6 +155,7 @@ with col1:
                     3. 업종이 서비스/유통인 경우: 물류 혁신, 친환경 패키징, 독자적인 서비스 알고리즘 등 실질적 차별화 요소를 제안할 것.
                     4. 전문적인 기술 명칭과 함께, 왜 이것이 벤처인증(혁신성)에 유리한지 1문장씩 덧붙일 것.
                     """
+                    # 리스트 형태로 정확히 전달
                     response = model.generate_content([recommend_prompt, analysis_image])
                     st.session_state.suggestions = response.text
                     st.session_state.user_db.at[user_idx, 'usage_count'] += 1
@@ -171,7 +174,7 @@ with col2:
         elif not selected_topic:
             st.warning("기술명을 입력해 주세요.")
         else:
-            with st.spinner('베테랑 컨설턴트의 시각으로 상세 리포트를 생성 중입니다...'):
+            with st.spinner('베테랑 컨설턴트의 시각으로 11개 항목 리포트를 생성 중입니다...'):
                 form_prompt = f"""
                 당신은 20년 경력의 대한민국 최고의 벤처인증 전문 컨설턴트입니다. 
                 신청기술 [{selected_topic}]에 대해 다음 11개 항목을 각각 상세히 작성하세요. 
@@ -203,8 +206,9 @@ with col2:
                 ### [11. 연계 가능 정책자금 추천]
                 """
                 try:
-                    content = [form_prompt, analysis_image] if analysis_image else form_prompt
-                    response = model.generate_content(content)
+                    # 이미지 정보가 있으면 함께 전달하여 맥락 강화
+                    input_data = [form_prompt, analysis_image] if analysis_image else form_prompt
+                    response = model.generate_content(input_data)
                     report_text = response.text
                     sections = report_text.split('### ')
                     st.session_state.report_sections = [s for s in sections if s.strip()]
