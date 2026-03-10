@@ -160,19 +160,30 @@ with st.sidebar:
     idx = user_db[user_db['email'] == st.session_state.authenticated_user].index[0]
     st.write(f"📊 월 사용량: {user_db.at[idx, 'usage_count']} / {MAX_MONTHLY_LIMIT}")
 
-    # 🚀 관리자 전용 제어판 복구
+    # 🚀 관리자 전용 제어판 직관성 개선
     if user_db.at[idx, 'is_admin']:
         st.divider()
-        with st.expander("👑 관리자 전용: 사용자 승인 관리", expanded=False):
+        # expanded=True로 설정하여 새로고침 후에도 항상 열려있도록 고정
+        with st.expander("👑 관리자 전용: 사용자 승인 관리", expanded=True):
+            
+            # 승인/해제 완료 시 알림 메시지 표시 로직
+            if 'admin_msg' in st.session_state:
+                st.success(st.session_state.admin_msg)
+                del st.session_state.admin_msg
+                
             st.dataframe(user_db[['email', 'approved', 'usage_count']], use_container_width=True)
             target_email = st.selectbox("승인 상태 변경 대상", user_db['email'])
             c1, c2 = st.columns(2)
             if c1.button("✅ 승인", use_container_width=True):
                 user_db.loc[user_db['email'] == target_email, 'approved'] = True
-                save_db(user_db); st.rerun()
+                save_db(user_db)
+                st.session_state.admin_msg = f"'{target_email}' 계정이 승인되었습니다!"
+                st.rerun()
             if c2.button("🚫 해제", use_container_width=True):
                 user_db.loc[user_db['email'] == target_email, 'approved'] = False
-                save_db(user_db); st.rerun()
+                save_db(user_db)
+                st.session_state.admin_msg = f"'{target_email}' 계정 승인이 해제되었습니다."
+                st.rerun()
 
 # --- [1. 인증 성공 시] 동적 모델 할당 로직 ---
 try:
@@ -192,7 +203,7 @@ except Exception as e:
     st.stop()
 
 target_model_name = ""
-for preferred in ['gemini-1.5-flash', 'gemini-1.5-pro', 'gemini-pro-vision', 'gemini-pro']:
+for preferred in ['gemini-1.5-flash-8b', 'gemini-1.5-flash', 'gemini-1.5-pro', 'gemini-pro-vision', 'gemini-pro']:
     if preferred in available_models:
         target_model_name = preferred
         break
