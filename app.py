@@ -156,8 +156,23 @@ with st.sidebar:
     if st.button("로그아웃", use_container_width=True):
         st.session_state.authenticated_user = None
         st.rerun()
+    
     idx = user_db[user_db['email'] == st.session_state.authenticated_user].index[0]
     st.write(f"📊 월 사용량: {user_db.at[idx, 'usage_count']} / {MAX_MONTHLY_LIMIT}")
+
+    # 🚀 관리자 전용 제어판 복구
+    if user_db.at[idx, 'is_admin']:
+        st.divider()
+        with st.expander("👑 관리자 전용: 사용자 승인 관리", expanded=False):
+            st.dataframe(user_db[['email', 'approved', 'usage_count']], use_container_width=True)
+            target_email = st.selectbox("승인 상태 변경 대상", user_db['email'])
+            c1, c2 = st.columns(2)
+            if c1.button("✅ 승인", use_container_width=True):
+                user_db.loc[user_db['email'] == target_email, 'approved'] = True
+                save_db(user_db); st.rerun()
+            if c2.button("🚫 해제", use_container_width=True):
+                user_db.loc[user_db['email'] == target_email, 'approved'] = False
+                save_db(user_db); st.rerun()
 
 # --- [1. 인증 성공 시] 동적 모델 할당 로직 ---
 try:
