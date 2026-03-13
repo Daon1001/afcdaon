@@ -6,12 +6,6 @@ import pandas as pd
 import os
 from datetime import datetime, date
 
-# PDF 처리를 위한 라이브러리
-try:
-    from pdf2image import convert_from_bytes
-except ImportError:
-    pass
-
 # --- [0. 페이지 설정 및 디자인 완전 강제 적용 CSS] ---
 st.set_page_config(page_title="벤처인증 AI 마스터 컨설턴트", layout="wide")
 
@@ -76,6 +70,18 @@ custom_css = """
         margin-bottom: 2rem !important;
     }
     
+    /* 🚀 기술 추천 결과 카드 디자인 (눈 피로 완화) */
+    .suggestion-card {
+        background-color: #f8f9fa !important;
+        padding: 20px !important;
+        border-radius: 8px !important;
+        line-height: 1.7 !important;
+        border: 1px solid #e0e0e0 !important;
+        border-left: 6px solid #d4af37 !important; /* 금색 포인트 */
+        color: #222 !important; /* 가독성 높은 진한 회색/검정 */
+        margin-top: 15px !important;
+    }
+
     /* 리포트 카드 디자인 */
     .report-card {
         background-color: white !important;
@@ -163,10 +169,7 @@ with st.sidebar:
     # 🚀 관리자 전용 제어판 직관성 개선
     if user_db.at[idx, 'is_admin']:
         st.divider()
-        # expanded=True로 설정하여 새로고침 후에도 항상 열려있도록 고정
         with st.expander("👑 관리자 전용: 사용자 승인 관리", expanded=True):
-            
-            # 승인/해제 완료 시 알림 메시지 표시 로직
             if 'admin_msg' in st.session_state:
                 st.success(st.session_state.admin_msg)
                 del st.session_state.admin_msg
@@ -235,12 +238,16 @@ with col1:
     biz_type = st.radio("업종 선택", ["일반 기업", "IT / SW", "초기기업"], horizontal=True)
     uploaded_file = st.file_uploader("사업자등록증 업로드", type=["jpg", "png", "pdf"], key=f"up_{st.session_state.uploader_key}")
     
-    analysis_image = None
+    # 🚀 PDF 변환 로직 완전 개편 (pdf2image 제거, Gemini Native 읽기 지원)
+    analysis_content = None
     if uploaded_file:
+        file_bytes = uploaded_file.getvalue()
         if uploaded_file.type == "application/pdf":
-            try: pages = convert_from_bytes(uploaded_file.read()); analysis_image = pages[0]
-            except: st.error("PDF 변환 오류")
-        else: analysis_image = Image.open(uploaded_file)
+            # Gemini가 PDF를 직접 읽도록 포맷팅
+            analysis_content = {"mime_type": "application/pdf", "data": file_bytes}
+        else:
+            # 이미지는 기존대로 PIL 사용
+            analysis_content = Image.open(uploaded_file)
         
     user_guide_rec = st.text_area("💡 추천 가이드", placeholder="예: ESG 강조", key=f"gr_{st.session_state.uploader_key}")
     
@@ -249,7 +256,7 @@ with col1:
         else:
             with st.spinner('분석 중...'):
                 prompt = f"[{biz_type}] 벤처 기술 주제 3개 추천. {user_guide_rec}"
-                content = [prompt, analysis_image] if analysis_image else prompt
+                content = [prompt, analysis_content] if analysis_content else prompt
                 try:
                     response = model.generate_content(content)
                     st.session_state.suggestions = response.text
@@ -260,8 +267,14 @@ with col1:
                     else:
                         st.error(f"⚠️ 트래픽 지연 발생: {e}")
 
+    # 🚀 추천 결과 시각적 개선 (초록색 대신 깔끔한 전용 디자인 카드)
     if 'suggestions' in st.session_state:
-        st.success(st.session_state.suggestions)
+        st.markdown(f"""
+            <div class="suggestion-card">
+                <h4 style="margin-top:0; color:#0b1f52;">💡 AI 추천 기술 주제</h4>
+                {st.session_state.suggestions.replace(chr(10), "<br>")}
+            </div>
+        """, unsafe_allow_html=True)
 
 with col2:
     st.subheader("2️⃣ 마스터 리포트 생성")
@@ -288,7 +301,7 @@ with col2:
                 ### [10. 자금조달 계획의 구체적 방안]
                 ### [11. 연계 가능 정책자금 추천]
                 """
-                content = [form_prompt, analysis_image] if analysis_image else form_prompt
+                content = [form_prompt, analysis_content] if analysis_content else form_prompt
                 try:
                     response = model.generate_content(content)
                     st.session_state.report_sections = response.text.split('### ')
@@ -309,4 +322,4 @@ if 'report_sections' in st.session_state:
             title = lines[0].strip('[] ')
             body = lines[1] if len(lines) > 1 else ""
             with st.expander(f"📌 {title}", expanded=False):
-                st.markdown(f'<div class="report-card">{body.replace("\n", "<br>")}</div>', unsafe_allow_html=True)
+                st.markdown(f'<div class="report-card">{body.replace(chr(10), "<br>")}</div>', unsafe_allow_html=True)
