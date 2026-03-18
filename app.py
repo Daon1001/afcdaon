@@ -6,6 +6,12 @@ import pandas as pd
 import os
 from datetime import datetime, date
 
+# PDF 처리를 위한 라이브러리
+try:
+    from pdf2image import convert_from_bytes
+except ImportError:
+    pass
+
 # --- [0. 페이지 설정 및 디자인 완전 강제 적용 CSS] ---
 st.set_page_config(page_title="벤처인증 AI 마스터 컨설턴트", layout="wide")
 
@@ -70,15 +76,15 @@ custom_css = """
         margin-bottom: 2rem !important;
     }
     
-    /* 🚀 기술 추천 결과 카드 디자인 (눈 피로 완화) */
+    /* 기술 추천 결과 카드 디자인 */
     .suggestion-card {
         background-color: #f8f9fa !important;
         padding: 20px !important;
         border-radius: 8px !important;
         line-height: 1.7 !important;
         border: 1px solid #e0e0e0 !important;
-        border-left: 6px solid #d4af37 !important; /* 금색 포인트 */
-        color: #222 !important; /* 가독성 높은 진한 회색/검정 */
+        border-left: 6px solid #d4af37 !important;
+        color: #222 !important;
         margin-top: 15px !important;
     }
 
@@ -112,7 +118,8 @@ def load_db():
         if col not in df.columns: df[col] = 0 if 'count' in col else (date.today().month if 'month' in col else False)
     return df
 
-def save_db(df): df.to_csv(DB_FILE, index=False)
+def save_db(df): 
+    df.to_csv(DB_FILE, index=False)
 
 user_db = load_db()
 
@@ -166,14 +173,16 @@ with st.sidebar:
     idx = user_db[user_db['email'] == st.session_state.authenticated_user].index[0]
     st.write(f"📊 월 사용량: {user_db.at[idx, 'usage_count']} / {MAX_MONTHLY_LIMIT}")
 
-    # 🚀 관리자 전용 제어판 직관성 개선
+    # 🚀 관리자 전용 제어판 (서버 초기화 대비 DB 백업/복구 기능 추가)
     if user_db.at[idx, 'is_admin']:
         st.divider()
-        with st.expander("👑 관리자 전용: 사용자 승인 관리", expanded=True):
+        with st.expander("👑 관리자: 사용자 승인 및 DB 백업", expanded=True):
             if 'admin_msg' in st.session_state:
                 st.success(st.session_state.admin_msg)
                 del st.session_state.admin_msg
                 
+            # 1. 승인 관리 섹션
+            st.markdown("**1. 회원 승인 관리**")
             st.dataframe(user_db[['email', 'approved', 'usage_count']], use_container_width=True)
             target_email = st.selectbox("승인 상태 변경 대상", user_db['email'])
             c1, c2 = st.columns(2)
@@ -187,6 +196,21 @@ with st.sidebar:
                 save_db(user_db)
                 st.session_state.admin_msg = f"'{target_email}' 계정 승인이 해제되었습니다."
                 st.rerun()
+            
+            # 2. 서버 초기화 방지용 DB 백업/복구 섹션
+            st.divider()
+            st.markdown("**2. 서버 초기화 방지 DB 관리**")
+            
+            with open(DB_FILE, "rb") as f:
+                st.download_button("📥 현재 회원 DB 백업 (다운로드)", f, file_name=f"users_backup_{date.today()}.csv", mime="text/csv", use_container_width=True)
+            
+            uploaded_db = st.file_uploader("📤 백업한 DB 복구 (업로드)", type=["csv"])
+            if uploaded_db:
+                if st.button("🚨 이 파일로 전체 회원 DB 덮어쓰기", type="primary", use_container_width=True):
+                    restored_df = pd.read_csv(uploaded_db)
+                    save_db(restored_df)
+                    st.success("✅ DB가 성공적으로 복구되었습니다! 새로고침합니다.")
+                    st.rerun()
 
 # --- [1. 인증 성공 시] 동적 모델 할당 로직 ---
 try:
@@ -238,15 +262,13 @@ with col1:
     biz_type = st.radio("업종 선택", ["일반 기업", "IT / SW", "초기기업"], horizontal=True)
     uploaded_file = st.file_uploader("사업자등록증 업로드", type=["jpg", "png", "pdf"], key=f"up_{st.session_state.uploader_key}")
     
-    # 🚀 PDF 변환 로직 완전 개편 (pdf2image 제거, Gemini Native 읽기 지원)
+    # PDF 변환 로직 (Gemini Native 지원)
     analysis_content = None
     if uploaded_file:
         file_bytes = uploaded_file.getvalue()
         if uploaded_file.type == "application/pdf":
-            # Gemini가 PDF를 직접 읽도록 포맷팅
             analysis_content = {"mime_type": "application/pdf", "data": file_bytes}
         else:
-            # 이미지는 기존대로 PIL 사용
             analysis_content = Image.open(uploaded_file)
         
     user_guide_rec = st.text_area("💡 추천 가이드", placeholder="예: ESG 강조", key=f"gr_{st.session_state.uploader_key}")
@@ -263,11 +285,11 @@ with col1:
                     user_db.at[idx, 'usage_count'] += 1; save_db(user_db); st.rerun()
                 except Exception as e:
                     if "ResourceExhausted" in str(e) or "429" in str(e):
-                        st.error("⏳ 구글 AI 서버의 분당/일일 사용 한도(Quota)를 초과했습니다. 약 1~2분 정도 완전히 기다리신 후 딱 한 번만 다시 클릭해 주세요.")
+                        st.error("⏳ 구글 AI 서버의 분당/일일 사용 한도(Quota)를 초과했습니다. 약 1~2분 정도 완전히 기다리신 후 다시 클릭해 주세요.")
                     else:
                         st.error(f"⚠️ 트래픽 지연 발생: {e}")
 
-    # 🚀 추천 결과 시각적 개선 (초록색 대신 깔끔한 전용 디자인 카드)
+    # 추천 결과 디자인 카드 적용
     if 'suggestions' in st.session_state:
         st.markdown(f"""
             <div class="suggestion-card">
