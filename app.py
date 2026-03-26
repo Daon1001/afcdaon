@@ -23,11 +23,30 @@ st.set_page_config(
 )
 
 # =====================================================================
-# 🔒 영구 저장 시스템 (JSON 기반 - CSV보다 안정적)
-# Streamlit Cloud 재배포 시에도 session_state 캐시 활용
+# 🔒 영구 저장 시스템 — GitHub Gist를 원본 DB로 사용
+# 저장 우선순위: Gist(원본) → 로컬파일(캐시) → session_state(비상)
 # =====================================================================
-DB_FILE = "user_database.json"
-BACKUP_KEY = "db_backup_state"
+import requests
+
+DB_FILE = "user_database.json"       # 로컬 캐시
+BACKUP_KEY = "db_backup_state"       # session_state 비상 캐시
+GIST_CACHE_KEY = "gist_db_cache"     # Gist에서 마지막으로 받은 데이터
+
+def _gist_headers():
+    """Gist API 인증 헤더"""
+    token = st.secrets.get("github_token", "")
+    if not token:
+        return None
+    return {
+        "Authorization": f"token {token}",
+        "Accept": "application/vnd.github.v3+json"
+    }
+
+def _gist_id():
+    return st.secrets.get("gist_id", "")
+
+def _gist_filename():
+    return st.secrets.get("gist_filename", "venture_users.json")
 
 def get_default_db():
     """기본 관리자 계정이 포함된 초기 DB"""
@@ -51,43 +70,123 @@ def get_default_db():
         "last_updated": datetime.now().isoformat()
     }
 
+# ── Gist 읽기/쓰기 ──
+def gist_load():
+    """GitHub Gist에서 DB 읽기 (원본 소스)"""
+    headers = _gist_headers()
+    gist_id = _gist_id()
+    if not headers or not gist_id:
+        return None
+    try:
+        resp = requests.get(f"https://api.github.com/gists/{gist_id}", headers=headers, timeout=10)
+        if resp.status_code == 200:
+            data = resp.json()
+            filename = _gist_filename()
+            if filename in data.get("files", {}):
+                content = data["files"][filename]["content"]
+                db = json.loads(content)
+                return db
+    except Exception:
+        pass
+    return None
+
+def gist_save(db):
+    """GitHub Gist에 DB 쓰기 (원본 저장)"""
+    headers = _gist_headers()
+    gist_id = _gist_id()
+    if not headers or not gist_id:
+        return False
+    try:
+        payload = {
+            "files": {
+                _gist_filename(): {
+                    "content": json.dumps(db, ensure_ascii=False, indent=2)
+                }
+            }
+        }
+        resp = requests.patch(
+            f"https://api.github.com/gists/{gist_id}",
+            headers=headers,
+            json=payload,
+            timeout=10
+        )
+        return resp.status_code == 200
+    except Exception:
+        return False
+
+# ── 통합 로드/세이브 (3중 폴백) ──
 def load_db():
-    """JSON DB 로드 - 파일 → session_state 캐시 순으로 복구"""
-    # 1순위: 파일에서 로드
+    """
+    DB 로드 우선순위:
+    1순위: GitHub Gist (클라우드 원본)
+    2순위: 로컬 JSON 파일 (캐시)
+    3순위: session_state (비상 메모리)
+    4순위: 초기 DB 생성
+    """
+    # 1순위: Gist
+    db = gist_load()
+    if db and "users" in db:
+        # 로컬 캐시에도 동기화
+        _save_local(db)
+        return db
+    
+    # 2순위: 로컬 파일
     if os.path.exists(DB_FILE):
         try:
             with open(DB_FILE, 'r', encoding='utf-8') as f:
                 db = json.load(f)
-            # session_state에도 백업 저장
-            st.session_state[BACKUP_KEY] = json.dumps(db, ensure_ascii=False)
-            return db
-        except (json.JSONDecodeError, Exception):
-            pass
-    
-    # 2순위: session_state 백업에서 복구
-    if BACKUP_KEY in st.session_state:
-        try:
-            db = json.loads(st.session_state[BACKUP_KEY])
-            save_db(db)  # 파일로 재저장
-            return db
+            if "users" in db:
+                st.session_state[BACKUP_KEY] = json.dumps(db, ensure_ascii=False)
+                # Gist 복구 시도 (로컬엔 있는데 Gist가 비어있을 때)
+                gist_save(db)
+                return db
         except Exception:
             pass
     
-    # 3순위: 초기 DB 생성
+    # 3순위: session_state
+    if BACKUP_KEY in st.session_state:
+        try:
+            db = json.loads(st.session_state[BACKUP_KEY])
+            if "users" in db:
+                _save_local(db)
+                gist_save(db)
+                return db
+        except Exception:
+            pass
+    
+    # 4순위: 신규 생성
     db = get_default_db()
     save_db(db)
     return db
 
-def save_db(db):
-    """DB를 파일과 session_state 양쪽에 동시 저장 (이중 백업)"""
-    db["last_updated"] = datetime.now().isoformat()
+def _save_local(db):
+    """로컬 파일 + session_state 캐시 저장"""
     try:
         with open(DB_FILE, 'w', encoding='utf-8') as f:
             json.dump(db, f, ensure_ascii=False, indent=2)
     except Exception:
         pass
-    # session_state에도 항상 백업
     st.session_state[BACKUP_KEY] = json.dumps(db, ensure_ascii=False)
+
+def save_db(db):
+    """DB 저장 — Gist(원본) + 로컬파일(캐시) + session_state(비상) 3중 저장"""
+    db["last_updated"] = datetime.now().isoformat()
+    
+    # 1. Gist 저장 (원본)
+    gist_ok = gist_save(db)
+    
+    # 2. 로컬 + session_state
+    _save_local(db)
+    
+    # Gist 저장 실패 시 session_state에 플래그
+    if not gist_ok:
+        st.session_state["gist_sync_failed"] = True
+    else:
+        st.session_state["gist_sync_failed"] = False
+
+def is_gist_connected():
+    """Gist 연결 상태 확인"""
+    return bool(_gist_headers() and _gist_id())
 
 def get_user(db, email):
     return db["users"].get(email)
@@ -490,6 +589,20 @@ with st.sidebar:
     
     usage = current_user.get("usage_count", 0)
     progress = min(usage / MAX_MONTHLY_LIMIT, 1.0)
+    
+    # Gist 연결 상태 표시
+    gist_connected = is_gist_connected()
+    gist_sync_ok = not st.session_state.get("gist_sync_failed", False)
+    if gist_connected and gist_sync_ok:
+        gist_status = "🟢 Gist 동기화 정상"
+        gist_color = "rgba(74,222,128,0.8)"
+    elif gist_connected and not gist_sync_ok:
+        gist_status = "🟡 Gist 동기화 지연"
+        gist_color = "rgba(250,204,21,0.8)"
+    else:
+        gist_status = "🔴 Gist 미연결 (로컬 저장)"
+        gist_color = "rgba(248,113,113,0.8)"
+    
     st.markdown(f"""
         <div style="margin-bottom: 20px;">
             <div style="font-size: 12px; color: rgba(255,255,255,0.5); margin-bottom: 6px;">월간 사용량</div>
@@ -497,6 +610,7 @@ with st.sidebar:
                 <div style="background: linear-gradient(90deg, #d4af37, #f0d060); width: {progress*100}%; height: 100%; border-radius: 8px; transition: width 0.3s;"></div>
             </div>
             <div style="font-size: 13px; margin-top: 4px; color: rgba(255,255,255,0.7);">{usage} / {MAX_MONTHLY_LIMIT} 회</div>
+            <div style="font-size: 11px; margin-top: 8px; color: {gist_color};">{gist_status}</div>
         </div>
     """, unsafe_allow_html=True)
     
@@ -542,104 +656,122 @@ with st.sidebar:
                 st.session_state.admin_msg = f"'{target}' 승인 해제됨"
                 st.rerun()
         
-        with st.expander("🔐 DB 백업 / 복구", expanded=False):
-            # ── 백업 필요성 안내 ──
-            st.markdown("""
-                <div style="background: rgba(255,200,50,0.15); border: 1px solid rgba(255,200,50,0.3); border-radius: 8px; padding: 12px; margin-bottom: 14px; font-size: 12.5px; color: #ffd700;">
-                    ⚠️ <b>Streamlit Cloud는 서버 재배포 시 파일이 초기화됩니다.</b><br>
-                    회원 데이터를 안전하게 보존하려면 정기적으로 백업 파일을 다운로드하세요.
-                </div>
-            """, unsafe_allow_html=True)
+        with st.expander("🔐 DB 저장소 관리 (Gist + 수동백업)", expanded=False):
             
-            # ── 현재 DB 상태 요약 ──
+            # ── Gist 연결 상태 패널 ──
+            gist_ok = is_gist_connected()
+            if gist_ok:
+                sync_fail = st.session_state.get("gist_sync_failed", False)
+                if not sync_fail:
+                    st.markdown("""
+                        <div style="background: rgba(74,222,128,0.15); border: 1px solid rgba(74,222,128,0.3); border-radius: 8px; padding: 12px; margin-bottom: 14px; font-size: 12.5px; color: #4ade80;">
+                            ✅ <b>GitHub Gist 연결 정상</b><br>
+                            모든 회원 데이터가 GitHub에 자동 저장됩니다.<br>
+                            서버가 재시작되어도 데이터가 영구 보존됩니다.
+                        </div>
+                    """, unsafe_allow_html=True)
+                else:
+                    st.markdown("""
+                        <div style="background: rgba(250,204,21,0.15); border: 1px solid rgba(250,204,21,0.3); border-radius: 8px; padding: 12px; margin-bottom: 14px; font-size: 12.5px; color: #facc15;">
+                            ⚠️ <b>Gist 동기화 지연</b><br>
+                            일시적 네트워크 문제로 마지막 저장이 Gist에 반영되지 않았습니다.<br>
+                            로컬 캐시에는 저장되어 있으며, 다음 저장 시 자동 재시도됩니다.
+                        </div>
+                    """, unsafe_allow_html=True)
+                    if st.button("🔄 Gist 수동 동기화", use_container_width=True, key="manual_gist_sync"):
+                        if gist_save(user_db):
+                            st.session_state.gist_sync_failed = False
+                            st.session_state.admin_msg = "✅ Gist 동기화 성공!"
+                            st.rerun()
+                        else:
+                            st.error("동기화 실패. 토큰과 Gist ID를 확인하세요.")
+            else:
+                st.markdown("""
+                    <div style="background: rgba(248,113,113,0.15); border: 1px solid rgba(248,113,113,0.3); border-radius: 8px; padding: 12px; margin-bottom: 14px; font-size: 12.5px; color: #f87171;">
+                        🔴 <b>GitHub Gist 미연결</b><br>
+                        현재 로컬 파일에만 저장되며, 서버 재시작 시 초기화됩니다.<br>
+                        아래 설정 가이드를 참고하여 Gist를 연결하세요.
+                    </div>
+                """, unsafe_allow_html=True)
+                
+                with st.expander("📖 Gist 연결 설정 가이드", expanded=False):
+                    st.markdown("""
+                        <div style="font-size: 12px; line-height: 2; color: rgba(255,255,255,0.85);">
+                            <b>1단계: GitHub Personal Access Token 생성</b><br>
+                            &nbsp;&nbsp;① <a href="https://github.com/settings/tokens" target="_blank" style="color:#d4af37;">GitHub Settings → Developer settings → Tokens</a><br>
+                            &nbsp;&nbsp;② "Generate new token (classic)" 클릭<br>
+                            &nbsp;&nbsp;③ 범위(scope)에서 <b>gist</b>만 체크 → 생성<br>
+                            &nbsp;&nbsp;④ 생성된 토큰 복사 (ghp_xxxxx 형태)<br><br>
+                            <b>2단계: Gist 생성</b><br>
+                            &nbsp;&nbsp;① <a href="https://gist.github.com" target="_blank" style="color:#d4af37;">gist.github.com</a> 접속<br>
+                            &nbsp;&nbsp;② 파일명: <b>venture_users.json</b><br>
+                            &nbsp;&nbsp;③ 내용: <code>{}</code> 입력 → "Create secret gist" 클릭<br>
+                            &nbsp;&nbsp;④ URL에서 Gist ID 복사 (gist.github.com/사용자/<b>이부분</b>)<br><br>
+                            <b>3단계: Streamlit Secrets에 등록</b><br>
+                            &nbsp;&nbsp;① Streamlit Cloud → 앱 설정 → Secrets<br>
+                            &nbsp;&nbsp;② 아래 3줄 추가:
+                        </div>
+                    """, unsafe_allow_html=True)
+                    st.code('github_token = "ghp_여기에토큰"\ngist_id = "여기에Gist아이디"\ngist_filename = "venture_users.json"', language="toml")
+            
+            # ── DB 상태 요약 ──
+            st.divider()
             total_users = len(user_db["users"])
             approved_count = sum(1 for u in user_db["users"].values() if u.get("approved"))
             pending_count = total_users - approved_count
             last_updated = user_db.get("last_updated", "알 수 없음")
-            last_backup = st.session_state.get("last_backup_date", "백업 기록 없음")
             
             st.markdown(f"""
                 <div style="background: rgba(255,255,255,0.08); border-radius: 8px; padding: 12px; margin-bottom: 14px; font-size: 12px; line-height: 1.8;">
                     📊 총 회원: <b>{total_users}명</b> (승인 {approved_count} / 대기 {pending_count})<br>
-                    🕐 DB 최종 수정: <b>{last_updated[:16] if len(str(last_updated)) > 16 else last_updated}</b><br>
-                    💾 마지막 백업: <b>{last_backup if last_backup else '아직 백업하지 않음'}</b>
+                    🕐 DB 최종 수정: <b>{str(last_updated)[:16]}</b><br>
+                    💾 저장 방식: <b>{'GitHub Gist (영구)' if gist_ok else '로컬 파일 (임시)'}</b>
                 </div>
             """, unsafe_allow_html=True)
             
-            # ── 1. 즉시 백업 다운로드 ──
-            st.markdown("**1단계: 백업 파일 다운로드**", help="클릭하면 현재 회원 DB가 JSON 파일로 다운로드됩니다.")
+            # ── 수동 백업 다운로드 (Gist와 무관하게 항상 제공) ──
+            st.markdown("**📥 수동 백업 다운로드**")
+            st.caption("Gist 연결과 별개로, JSON 파일을 직접 보관할 수 있습니다.")
             db_json = json.dumps(user_db, ensure_ascii=False, indent=2)
-            backup_filename = f"venture_db_backup_{date.today().strftime('%Y%m%d')}.json"
-            
-            if st.download_button(
-                "📥 지금 백업 다운로드",
+            st.download_button(
+                "📥 현재 DB를 JSON으로 다운로드",
                 db_json,
-                file_name=backup_filename,
+                file_name=f"venture_db_backup_{date.today().strftime('%Y%m%d')}.json",
                 mime="application/json",
                 use_container_width=True,
                 key="backup_download_main"
-            ):
-                st.session_state.last_backup_date = datetime.now().strftime("%Y-%m-%d %H:%M")
-                st.session_state.backup_dismissed = True
+            )
             
-            # ── 2. Google Drive 자동 보관 가이드 ──
+            # ── 수동 복구 (JSON 업로드) ──
             st.divider()
-            st.markdown("**2단계: Google Drive에 보관 (권장)**")
-            st.markdown("""
-                <div style="background: rgba(255,255,255,0.06); border-radius: 8px; padding: 12px; font-size: 11.5px; line-height: 1.9; color: rgba(255,255,255,0.8);">
-                    ① 위 버튼으로 <b>.json 파일</b>을 다운로드<br>
-                    ② <a href="https://drive.google.com" target="_blank" style="color: #d4af37;">Google Drive</a>에 <b>'벤처인증_백업'</b> 폴더를 만들어 업로드<br>
-                    ③ 서버 초기화 시 아래 복구 기능으로 즉시 복원 가능<br>
-                    <span style="color: #d4af37;">💡 TIP: 매주 월요일 백업을 습관화하세요!</span>
-                </div>
-            """, unsafe_allow_html=True)
-            
-            # ── 3. 백업 복구 ──
-            st.divider()
-            st.markdown("**3단계: 백업 파일로 복구**")
+            st.markdown("**📤 수동 복구 (JSON 업로드)**")
+            st.caption("다운로드한 백업 파일이나 Gist에 문제가 있을 때 사용합니다.")
             uploaded_db = st.file_uploader(
-                "📤 백업 JSON 파일 업로드", 
-                type=["json"], 
+                "백업 JSON 파일 선택",
+                type=["json"],
                 key="db_restore",
-                help="이전에 다운로드한 .json 백업 파일을 선택하세요."
+                label_visibility="collapsed"
             )
             if uploaded_db:
-                # 업로드된 파일 미리보기
                 try:
                     preview_data = json.loads(uploaded_db.read())
-                    uploaded_db.seek(0)  # 읽기 위치 리셋
+                    uploaded_db.seek(0)
                     if "users" in preview_data:
                         preview_count = len(preview_data["users"])
                         preview_updated = preview_data.get("last_updated", "알 수 없음")
                         st.markdown(f"""
                             <div style="background: rgba(100,200,100,0.15); border: 1px solid rgba(100,200,100,0.3); border-radius: 8px; padding: 10px; font-size: 12px; margin-bottom: 8px;">
-                                ✅ 유효한 백업 파일<br>
-                                👥 회원 수: <b>{preview_count}명</b> | 🕐 백업 시점: <b>{str(preview_updated)[:16]}</b>
+                                ✅ 유효한 백업: <b>{preview_count}명</b> | 시점: <b>{str(preview_updated)[:16]}</b>
                             </div>
                         """, unsafe_allow_html=True)
-                        
                         if st.button("🚨 이 백업으로 전체 DB 덮어쓰기", type="primary", use_container_width=True):
                             save_db(preview_data)
-                            st.session_state.admin_msg = f"✅ DB 복구 완료! ({preview_count}명 회원 데이터 복원)"
+                            st.session_state.admin_msg = f"✅ DB 복구 완료! ({preview_count}명 복원, Gist 동기화 {'성공' if gist_ok else '건너뜀'})"
                             st.rerun()
                     else:
-                        st.error("❌ 올바른 백업 파일 형식이 아닙니다. 'users' 키가 필요합니다.")
+                        st.error("❌ 올바른 백업 파일이 아닙니다.")
                 except json.JSONDecodeError:
-                    st.error("❌ JSON 파일을 읽을 수 없습니다. 파일이 손상되었을 수 있습니다.")
-            
-            # ── 4. 자동 백업 주기 설정 ──
-            st.divider()
-            st.markdown("**⚙️ 백업 알림 설정**")
-            backup_interval = st.select_slider(
-                "백업 알림 주기",
-                options=[1, 2, 3, 5, 7],
-                value=3,
-                format_func=lambda x: f"{x}일마다",
-                key="backup_interval_slider"
-            )
-            if backup_interval:
-                st.session_state["auto_backup_interval"] = backup_interval
-                st.caption(f"📅 {backup_interval}일마다 로그인 시 백업 알림이 표시됩니다.")
+                    st.error("❌ JSON 파싱 실패. 파일 손상 여부를 확인하세요.")
 
 # --- Gemini API 설정 ---
 try:
@@ -680,34 +812,33 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # =====================================================================
-# 🔔 관리자 자동 백업 알림 시스템
+# 🔔 관리자 알림 시스템 (Gist 미연결 시 경고 / 동기화 실패 시 알림)
 # =====================================================================
 if current_user.get("is_admin") and not st.session_state.get("backup_dismissed"):
-    backup_interval = st.session_state.get("auto_backup_interval", AUTO_BACKUP_INTERVAL_DAYS)
-    last_backup = st.session_state.get("last_backup_date")
-    show_backup_alert = False
+    gist_connected = is_gist_connected()
+    gist_sync_ok = not st.session_state.get("gist_sync_failed", False)
     
-    if last_backup is None:
-        # 한 번도 백업한 적 없음
-        show_backup_alert = True
-        alert_reason = "아직 한 번도 백업하지 않았습니다."
-    else:
-        try:
-            last_dt = datetime.strptime(last_backup, "%Y-%m-%d %H:%M")
-            days_since = (datetime.now() - last_dt).days
-            if days_since >= backup_interval:
-                show_backup_alert = True
-                alert_reason = f"마지막 백업 후 {days_since}일이 경과했습니다."
-        except ValueError:
-            show_backup_alert = True
-            alert_reason = "백업 날짜를 확인할 수 없습니다."
-    
-    if show_backup_alert:
+    if not gist_connected:
+        # Gist 미연결 → 강력 경고
         backup_col1, backup_col2 = st.columns([5, 1])
         with backup_col1:
-            st.warning(f"""
-                🔔 **DB 백업이 필요합니다!** — {alert_reason}  
-                서버 초기화 시 회원 데이터가 유실될 수 있습니다. 좌측 사이드바 **관리자 패널 → DB 백업/복구**에서 백업해주세요.
+            st.error("""
+                🔴 **GitHub Gist가 연결되지 않았습니다!**  
+                현재 로컬 파일에만 저장 중이며, 서버 재시작 시 모든 회원 데이터가 초기화됩니다.  
+                좌측 사이드바 **관리자 패널 → DB 저장소 관리**에서 Gist를 연결하세요.
+            """)
+        with backup_col2:
+            st.write("")
+            if st.button("✕ 닫기", key="dismiss_backup_alert"):
+                st.session_state.backup_dismissed = True
+                st.rerun()
+    elif not gist_sync_ok:
+        # Gist 연결됐지만 마지막 동기화 실패
+        backup_col1, backup_col2 = st.columns([5, 1])
+        with backup_col1:
+            st.warning("""
+                🟡 **Gist 동기화가 지연되고 있습니다.**  
+                마지막 저장이 GitHub에 반영되지 않았습니다. 사이드바에서 수동 동기화를 시도하세요.
             """)
         with backup_col2:
             st.write("")
