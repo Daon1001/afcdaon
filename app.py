@@ -117,6 +117,8 @@ def save_db(db):
     gist_ok = gist_save(db)
     _save_local(db)
     st.session_state["gist_sync_failed"] = not gist_ok
+    # ★ session_state의 DB 캐시도 갱신
+    st.session_state["user_db_cache"] = db
 
 def is_gist_connected():
     return bool(_gist_headers() and _gist_id())
@@ -136,7 +138,10 @@ def reset_monthly_usage(db):
         save_db(db)
     return db
 
-user_db = load_db()
+# ★ 수정: DB를 session_state에 캐싱하여 매번 Gist 호출 방지
+if "user_db_cache" not in st.session_state:
+    st.session_state["user_db_cache"] = load_db()
+user_db = st.session_state["user_db_cache"]
 user_db = reset_monthly_usage(user_db)
 
 # =====================================================================
@@ -348,16 +353,20 @@ if 'uploader_key' not in st.session_state:
     st.session_state.uploader_key = "1"
 if 'backup_dismissed' not in st.session_state:
     st.session_state.backup_dismissed = False
+# ★ 수정: AI 결과 저장용 session_state 명시 초기화
+if 'suggestions' not in st.session_state:
+    st.session_state.suggestions = None
+if 'report_sections' not in st.session_state:
+    st.session_state.report_sections = None
 
 MAX_MONTHLY_LIMIT = 30
 
 # =====================================================================
-# 🔐 로그인 — HTML(장식)과 Streamlit 위젯을 완전 분리
+# 🔐 로그인
 # =====================================================================
 if st.session_state.authenticated_user is None:
     _, lc, _ = st.columns([1, 1.5, 1])
     with lc:
-        # 순수 HTML 장식 (위젯 없음)
         st.markdown("""
             <div class="login-hero">
                 <span class="badge">VENTURE CERTIFICATION</span>
@@ -366,7 +375,6 @@ if st.session_state.authenticated_user is None:
             </div>
         """, unsafe_allow_html=True)
 
-        # Streamlit 위젯 (HTML div 바깥)
         login_email = st.text_input("이메일", placeholder="example@gmail.com", label_visibility="collapsed").strip().lower()
         st.write("")
         b1, b2 = st.columns(2)
@@ -504,6 +512,13 @@ with st.sidebar:
                 except Exception:
                     st.error("JSON 파싱 실패")
 
+    # ★ 수정: DB 강제 새로고침 버튼 (관리자용)
+    if current_user.get("is_admin"):
+        st.divider()
+        if st.button("🔄 DB 새로고침", use_container_width=True, key="refresh_db"):
+            st.session_state["user_db_cache"] = load_db()
+            st.rerun()
+
 # ── Gemini API ──
 try:
     API_KEY = st.secrets["gemini_api_key"]
@@ -550,10 +565,10 @@ if current_user.get("is_admin") and not is_gist_connected() and not st.session_s
             st.session_state.backup_dismissed = True
             st.rerun()
 
+# ★ 수정: "새 기업 컨설팅 시작" — uploader_key만 바꾸지 않고 결과만 초기화
 if st.button("🔄 새 기업 컨설팅 시작"):
-    for k in ['suggestions', 'report_sections']:
-        if k in st.session_state:
-            del st.session_state[k]
+    st.session_state.suggestions = None
+    st.session_state.report_sections = None
     st.session_state.uploader_key = str(int(st.session_state.uploader_key) + 1)
     st.rerun()
 
@@ -589,14 +604,15 @@ with col1:
                     st.session_state.suggestions = resp.text
                     user_db["users"][current_user_email]["usage_count"] += 1
                     save_db(user_db)
-                    st.rerun()
+                    # ★ 수정: st.rerun() 제거 — session_state에 저장했으므로 아래에서 바로 출력
                 except Exception as e:
                     if "429" in str(e) or "ResourceExhausted" in str(e):
                         st.error("⏳ AI 한도 초과. 1~2분 후 재시도")
                     else:
                         st.error(f"⚠️ 오류: {e}")
 
-    if 'suggestions' in st.session_state:
+    # ★ 수정: None 체크 추가
+    if st.session_state.suggestions is not None:
         st.markdown(f'<div class="ai-result"><b>💡 AI 추천 기술 주제</b><br><br>{st.session_state.suggestions.replace(chr(10), "<br>")}</div>', unsafe_allow_html=True)
 
 with col2:
@@ -647,7 +663,7 @@ V 당사 성과가 가능한 이유는 [핵심 역량]이 있기 때문이며 �
                     st.session_state.report_sections = resp.text.split('### ')
                     user_db["users"][current_user_email]["usage_count"] += 1
                     save_db(user_db)
-                    st.rerun()
+                    # ★ 수정: st.rerun() 제거 — session_state에 저장했으므로 아래에서 바로 출력
                 except Exception as e:
                     if "429" in str(e) or "ResourceExhausted" in str(e):
                         st.error("⏳ 서버 한도 초과. 2분 후 재시도")
@@ -657,7 +673,8 @@ V 당사 성과가 가능한 이유는 [핵심 역량]이 있기 때문이며 �
 # =====================================================================
 # 📄 리포트 출력
 # =====================================================================
-if 'report_sections' in st.session_state:
+# ★ 수정: None 체크 추가
+if st.session_state.report_sections is not None:
     st.divider()
     st.markdown('<div class="sec-title"><h3>📄 마스터 리포트 결과</h3></div>', unsafe_allow_html=True)
     full_report = "\n\n".join(st.session_state.report_sections)
