@@ -361,6 +361,17 @@ if 'report_sections' not in st.session_state:
 
 MAX_MONTHLY_LIMIT = 30
 
+# ★ Gemini 무료 티어 일일 API 한도 (RPD)
+DAILY_API_LIMIT = 230  # 무료 250회 중 여유분 20회 확보
+if 'daily_api_count' not in st.session_state:
+    st.session_state.daily_api_count = 0
+    st.session_state.daily_api_date = date.today().isoformat()
+
+# 날짜 바뀌면 일일 카운트 리셋
+if st.session_state.daily_api_date != date.today().isoformat():
+    st.session_state.daily_api_count = 0
+    st.session_state.daily_api_date = date.today().isoformat()
+
 # =====================================================================
 # 🔐 로그인
 # =====================================================================
@@ -420,6 +431,18 @@ with st.sidebar:
             <div style="background:linear-gradient(90deg,#d4af37,#f0d060);width:{pct*100}%;height:100%;border-radius:6px;"></div>
         </div>
         <div style="font-size:12px;margin-top:3px;opacity:0.7;">{usage} / {MAX_MONTHLY_LIMIT} 회</div>
+    """, unsafe_allow_html=True)
+
+    # ★ 일일 API 잔여량 표시
+    daily_used = st.session_state.daily_api_count
+    daily_pct = min(daily_used / DAILY_API_LIMIT, 1.0)
+    daily_color = "#4ade80" if daily_pct < 0.7 else ("#facc15" if daily_pct < 0.9 else "#f87171")
+    st.markdown(f"""
+        <div style="margin:8px 0 4px;font-size:12px;opacity:0.6;">오늘 API 사용량</div>
+        <div style="background:rgba(255,255,255,0.12);border-radius:6px;height:7px;overflow:hidden;">
+            <div style="background:{daily_color};width:{daily_pct*100}%;height:100%;border-radius:6px;"></div>
+        </div>
+        <div style="font-size:12px;margin-top:3px;opacity:0.7;">{daily_used} / {DAILY_API_LIMIT} 회 (무료 한도)</div>
     """, unsafe_allow_html=True)
 
     gist_on = is_gist_connected()
@@ -537,7 +560,7 @@ except Exception as e:
     st.stop()
 
 target_model_name = ""
-for pref in ['gemini-2.0-flash', 'gemini-1.5-flash-8b', 'gemini-1.5-flash', 'gemini-1.5-pro', 'gemini-pro']:
+for pref in ['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-1.5-flash', 'gemini-1.5-pro', 'gemini-pro']:
     if pref in available_models:
         target_model_name = pref
         break
@@ -592,6 +615,8 @@ with col1:
     if st.button("✨ AI 기술 주제 추천", type="primary", use_container_width=True):
         if current_user.get("usage_count", 0) >= MAX_MONTHLY_LIMIT:
             st.error("월간 한도 초과")
+        elif st.session_state.daily_api_count >= DAILY_API_LIMIT:
+            st.error("🚫 오늘 무료 API 한도를 모두 사용했습니다. 내일 자정(태평양 시간) 이후 다시 시도해주세요.")
         else:
             with st.spinner('AI 분석 중...'):
                 prompt = f"""당신은 20년 경력의 벤처인증 전문 컨설턴트입니다.
@@ -599,17 +624,25 @@ with col1:
 각 주제: ① 기술명 ② 추천 사유 ③ 벤처인증 적합도
 {f'추가: {user_guide_rec}' if user_guide_rec else ''}"""
                 content = [prompt, analysis_content] if analysis_content else prompt
-                try:
-                    resp = model.generate_content(content)
-                    st.session_state.suggestions = resp.text
-                    user_db["users"][current_user_email]["usage_count"] += 1
-                    save_db(user_db)
-                    # ★ 수정: st.rerun() 제거 — session_state에 저장했으므로 아래에서 바로 출력
-                except Exception as e:
-                    if "429" in str(e) or "ResourceExhausted" in str(e):
-                        st.error("⏳ AI 한도 초과. 1~2분 후 재시도")
-                    else:
-                        st.error(f"⚠️ 오류: {e}")
+                import time
+                max_retries = 2
+                for attempt in range(max_retries):
+                    try:
+                        resp = model.generate_content(content)
+                        st.session_state.suggestions = resp.text
+                        st.session_state.daily_api_count += 1
+                        user_db["users"][current_user_email]["usage_count"] += 1
+                        save_db(user_db)
+                        break
+                    except Exception as e:
+                        if ("429" in str(e) or "ResourceExhausted" in str(e)) and attempt < max_retries - 1:
+                            st.warning(f"⏳ API 한도 감지, 30초 후 자동 재시도... ({attempt+1}/{max_retries})")
+                            time.sleep(30)
+                        elif "429" in str(e) or "ResourceExhausted" in str(e):
+                            st.session_state.daily_api_count = DAILY_API_LIMIT  # 한도 도달로 간주
+                            st.error("🚫 Google AI 무료 한도 초과. 내일 다시 시도하거나, Google AI Studio에서 빌링을 연결하면 한도가 크게 늘어납니다.")
+                        else:
+                            st.error(f"⚠️ 오류: {e}")
 
     # ★ 수정: None 체크 추가
     if st.session_state.suggestions is not None:
@@ -625,6 +658,8 @@ with col2:
             st.warning("기술명을 입력하세요.")
         elif current_user.get("usage_count", 0) >= MAX_MONTHLY_LIMIT:
             st.error("월간 한도 초과")
+        elif st.session_state.daily_api_count >= DAILY_API_LIMIT:
+            st.error("🚫 오늘 무료 API 한도를 모두 사용했습니다. 내일 자정(태평양 시간) 이후 다시 시도해주세요.")
         else:
             with st.spinner('리포트 생성 중... (30초~1분)'):
                 form_prompt = f"""당신은 20년 경력의 벤처인증 전문 컨설턴트입니다.
@@ -658,17 +693,25 @@ V 당사 성과가 가능한 이유는 [핵심 역량]이 있기 때문이며 �
 ### [11. 연계 가능 정책자금 추천]
 """
                 content = [form_prompt, analysis_content] if analysis_content else form_prompt
-                try:
-                    resp = model.generate_content(content)
-                    st.session_state.report_sections = resp.text.split('### ')
-                    user_db["users"][current_user_email]["usage_count"] += 1
-                    save_db(user_db)
-                    # ★ 수정: st.rerun() 제거 — session_state에 저장했으므로 아래에서 바로 출력
-                except Exception as e:
-                    if "429" in str(e) or "ResourceExhausted" in str(e):
-                        st.error("⏳ 서버 한도 초과. 2분 후 재시도")
-                    else:
-                        st.error(f"⚠️ 오류: {e}")
+                import time
+                max_retries = 2
+                for attempt in range(max_retries):
+                    try:
+                        resp = model.generate_content(content)
+                        st.session_state.report_sections = resp.text.split('### ')
+                        st.session_state.daily_api_count += 1
+                        user_db["users"][current_user_email]["usage_count"] += 1
+                        save_db(user_db)
+                        break
+                    except Exception as e:
+                        if ("429" in str(e) or "ResourceExhausted" in str(e)) and attempt < max_retries - 1:
+                            st.warning(f"⏳ API 한도 감지, 30초 후 자동 재시도... ({attempt+1}/{max_retries})")
+                            time.sleep(30)
+                        elif "429" in str(e) or "ResourceExhausted" in str(e):
+                            st.session_state.daily_api_count = DAILY_API_LIMIT
+                            st.error("🚫 Google AI 무료 한도 초과. 내일 다시 시도하거나, Google AI Studio에서 빌링을 연결하면 한도가 크게 늘어납니다.")
+                        else:
+                            st.error(f"⚠️ 오류: {e}")
 
 # =====================================================================
 # 📄 리포트 출력
