@@ -1,6 +1,6 @@
 import streamlit as st
 import google.generativeai as genai
-from PIL import Image, ImageGrab  # ImageGrab 추가
+from PIL import Image
 import io
 import pandas as pd
 import os
@@ -8,8 +8,8 @@ import json
 import requests
 from datetime import datetime, date
 import time
-import pyautogui  # 화면 제어용 추가
-import pyperclip  # 한글 클립보드 복사-붙여넣기용 추가
+import base64
+import streamlit.components.v1 as components
 
 try:
     from pdf2image import convert_from_bytes
@@ -590,7 +590,7 @@ if st.button("🔄 새 기업 컨설팅 시작"):
     st.rerun()
 
 # =====================================================================
-# 메인 2단
+# 메인 2단 (Step 1 & Step 2)
 # =====================================================================
 col1, col2 = st.columns(2, gap="large")
 
@@ -739,78 +739,113 @@ if st.session_state.report_sections is not None:
                 st.markdown(f'<div class="rpt-body">{body.replace(chr(10), "<br>")}</div>', unsafe_allow_html=True)
 
 # =====================================================================
-# 🎯 Step 3: 화면 스캔 및 사이트 자동 입력 (RPA 기능 신규 통합)
+# 🎯 Step 3: ALOA 방식 웹 화면 스캔 및 컨설팅 (클라우드 호환 완벽 적용)
 # =====================================================================
 st.divider()
-st.markdown('<div class="sec-title"><h3>🎯 Step 3 · 화면 스캔 및 사이트 자동 입력 (RPA)</h3></div>', unsafe_allow_html=True)
+st.markdown('<div class="sec-title"><h3>🎯 Step 3 · 화면 스캔 및 결과 복사 (ALOA 방식)</h3></div>', unsafe_allow_html=True)
 
 col3_1, col3_2 = st.columns([2, 1])
+
 with col3_1:
     st.info("""
-    **[스캔 및 자동 입력 사용 가이드]**
-    1. Step 1에서 **사업자등록증**이 업로드되어 있어야 합니다.
-    2. 벤처인증이나 기업부설연구소 신청 사이트를 띄우고, **내용을 입력할 칸을 마우스로 클릭(커서 깜빡임)** 해두세요.
-    3. 아래 버튼을 누르면 5초의 대기 시간이 주어집니다. 얼른 사이트 화면으로 전환하세요.
-    4. 5초 뒤 AI가 현재 화면의 문맥을 읽고 사업자등록증 정보를 바탕으로 알맞은 내용을 자동 타이핑합니다.
+    **[스캔 및 복사 사용 가이드]**
+    1. 우측의 **'📸 스캔 시작'** 버튼을 누릅니다. (브라우저 상단 권한 허용 필요)
+    2. 팝업창에서 **'창(Window)'** 또는 **'전체 화면'** 탭을 클릭해 작성할 정부 사이트 창을 선택 후 '공유'를 누릅니다.
+    3. 약 2~3초 뒤 프로그램이 창 화면을 캡처하고 분석을 시작합니다.
+    4. 분석 완료 후 아래에 생성된 결과물 우측 상단의 **[복사 아이콘]**을 클릭하여 정부 사이트에 쉽게 붙여넣기(Ctrl+V) 하세요.
     """)
 
 with col3_2:
-    if st.button("🚀 스캔 및 자동 작성 시작", type="primary", use_container_width=True):
-        if not analysis_content:
-            st.warning("⚠️ Step 1에서 사업자등록증을 먼저 업로드해주세요.")
-        elif current_user.get("usage_count", 0) >= MAX_MONTHLY_LIMIT:
-            st.error("🚫 월간 한도를 초과했습니다.")
-        elif st.session_state.daily_api_count >= DAILY_API_LIMIT:
-            st.error("🚫 오늘 무료 API 한도를 모두 사용했습니다.")
-        else:
-            # 5초 카운트다운 UI
-            progress_text = st.empty()
-            my_bar = st.progress(0)
+    # JavaScript 기반 화면 스캔 엔진 (Streamlit Cloud 환경의 한계를 돌파하는 핵심 기능)
+    scan_html = """
+    <div id="container" style="text-align: center; margin-top: 10px;">
+        <button id="scanBtn" style="padding: 15px 30px; background: linear-gradient(135deg, #d4af37 0%, #b8952e 100%); color: #0b1f52; font-weight: bold; font-size: 16px; border: none; border-radius: 10px; cursor: pointer; width: 100%; box-shadow: 0px 4px 6px rgba(0,0,0,0.1);">
+            📸 화면 스캔 시작 (공유)
+        </button>
+        <video id="video" style="display:none;" autoplay></video>
+        <canvas id="canvas" style="display:none;"></canvas>
+    </div>
+    <script>
+        document.getElementById('scanBtn').onclick = async () => {
+            try {
+                // 브라우저 화면 공유 API 호출
+                const stream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: false });
+                const video = document.getElementById('video');
+                video.srcObject = stream;
+                
+                // 화면이 완전히 로드될 수 있도록 2.5초 대기 후 캡처
+                setTimeout(() => {
+                    const canvas = document.getElementById('canvas');
+                    canvas.width = video.videoWidth;
+                    canvas.height = video.videoHeight;
+                    canvas.getContext('2d').drawImage(video, 0, 0);
+                    
+                    // 캡처된 이미지를 Base64 데이터로 변환 후 Python(Streamlit)으로 전송
+                    const imageData = canvas.toDataURL('image/jpeg', 0.8);
+                    window.parent.postMessage({
+                        type: 'streamlit:setComponentValue',
+                        value: imageData
+                    }, '*');
+                    
+                    // 캡처 완료 후 스트림 강제 종료 (화면 공유 끄기)
+                    stream.getTracks().forEach(track => track.stop());
+                }, 2500); 
+            } catch (err) {
+                console.error("사용자가 화면 공유를 취소했거나 오류 발생:", err);
+            }
+        };
+    </script>
+    """
+    
+    # HTML 컴포넌트 실행 및 데이터 수신
+    captured_data = components.html(scan_html, height=100)
+
+# JS에서 스캔 데이터를 Python으로 넘겨주면 아래 로직이 즉시 자동 실행됩니다.
+if captured_data:
+    try:
+        # Base64 문자열 파싱 및 Pillow 이미지 객체로 변환
+        header, encoded = captured_data.split(",", 1)
+        image_bytes = base64.b64decode(encoded)
+        screen_img = Image.open(io.BytesIO(image_bytes))
+        
+        st.success("✅ 대상 사이트 화면 스캔이 완료되었습니다!")
+        
+        with st.expander("👀 스캔된 원본 화면 확인", expanded=False):
+            st.image(screen_img, caption="스캔된 웹사이트 스크린샷", use_column_width=True)
+        
+        with st.spinner("AI 컨설턴트가 화면 문맥을 파악하고 최적의 문구를 작성 중입니다..."):
+            rpa_prompt = """당신은 20년 경력의 중소기업 벤처인증 전문 컨설턴트입니다.
+            제공된 데이터를 종합하여 지시를 수행하세요.
+            [이미지 1]: 사업자등록증 (혹은 사용자 제공 문서)
+            [이미지 2]: 사용자가 작성 중인 벤처인증/연구소 포털 사이트 화면 스크린샷. 이 화면에서 가장 크거나 활성화된 입력창의 제목(예: 사업개요, 기술혁신성 등)과 주변 문맥을 파악하세요.
             
-            for percent_complete in range(5):
-                time.sleep(1)
-                my_bar.progress((percent_complete + 1) * 20)
-                progress_text.text(f"대상 화면으로 이동하세요! 캡처까지 {4 - percent_complete}초...")
+            [지시사항]
+            화면 스크린샷이 요구하는 주제에 정확하게 부합하는 300~500자 분량의 전문적인 사업계획서 텍스트를 작성하세요.
+            어조는 매우 논리적이고 전문적이어야 합니다. 인사말이나 안내 멘트는 절대 하지 말고, 사용자가 즉시 복사해서 붙여넣을 수 있는 **최종 본문 텍스트만** 출력하세요."""
             
-            progress_text.text("📸 화면 스캔 및 AI 분석 중...")
+            # Step 1에서 업로드된 분석 자료가 살아있는 경우 통합 전달
+            content = [rpa_prompt, screen_img] 
+            if 'analysis_content' in locals() and analysis_content:
+                content.insert(1, analysis_content)
+                
+            # Gemini에 이미지 및 프롬프트 전송
+            resp = model.generate_content(content)
+            generated_text = resp.text.strip()
             
-            try:
-                # 현재 전체 화면 캡처
-                screen_img = ImageGrab.grab()
-                
-                # Gemini RPA 프롬프트
-                rpa_prompt = """당신은 중소기업 벤처인증 전문 컨설턴트입니다.
-                제공된 2개의 데이터를 분석하여 작업을 수행하세요.
-                [이미지 1]: 사업자등록증 데이터입니다. 업태와 종목을 확인하세요.
-                [이미지 2]: 사용자가 작성 중인 벤처인증/연구소 사이트 화면 스크린샷입니다. 입력 커서가 있는 곳의 제목이나 주변 문맥을 파악하세요.
-                
-                사업자등록증의 종목을 바탕으로 스크린샷 화면이 요구하는 문맥(예: 사업개요, 기술혁신성 등)에 맞게 300~500자 분량의 전문적인 내용을 작성하세요.
-                인사말이나 부가 설명은 절대 하지 말고, 오직 대상 입력창에 타이핑될 **본문 텍스트만** 출력하세요."""
-                
-                content = [rpa_prompt, analysis_content, screen_img]
-                
-                # AI 호출 및 API 카운트 차감
-                resp = model.generate_content(content)
-                st.session_state.daily_api_count += 1
-                user_db["users"][current_user_email]["usage_count"] += 1
-                save_db(user_db)
-                
-                generated_text = resp.text.strip()
-                
-                # 클립보드 복사 후 붙여넣기 실행 (한글 호환성)
-                pyperclip.copy(generated_text)
-                
-                # Mac OS 환경이라면 'ctrl' 대신 'command'로 수정 필요
-                pyautogui.hotkey('ctrl', 'v')
-                
-                progress_text.text("✅ 자동 작성이 완료되었습니다!")
-                st.success("대상 웹사이트에 아래 내용이 성공적으로 입력되었습니다.")
-                st.text_area("생성된 컨설팅 내용 백업 (수동 복사 가능)", generated_text, height=150)
-                st.balloons()
-                
-            except Exception as e:
-                progress_text.empty()
-                st.error(f"오류가 발생했습니다: {str(e)}")
-                st.warning("듀얼 모니터 환경이거나 화면 캡처 권한이 막혀 있는지 확인해주세요.")
+            # API 사용량 카운트 (스캔 1회당 1차감)
+            st.session_state.daily_api_count += 1
+            user_db["users"][current_user_email]["usage_count"] += 1
+            save_db(user_db)
+            
+            st.markdown('<div class="sec-title"><h3>📋 생성된 컨설팅 내용 (복사 전용)</h3></div>', unsafe_allow_html=True)
+            
+            # Streamlit의 st.code는 우측 상단에 복사(Copy) 버튼이 기본 내장되어 있어 클라우드 환경에서 매우 유용합니다.
+            st.code(generated_text, language="text")
+            st.caption("👆 위 텍스트 박스 우측 상단의 **'복사' 아이콘**을 클릭하면 내용이 복사됩니다.")
+            st.balloons()
+            
+    except Exception as e:
+        st.error(f"이미지 분석 중 오류가 발생했습니다: {str(e)}")
+        st.warning("화면 공유 기능이 올바르게 실행되지 않았을 수 있습니다. 브라우저 설정을 확인해주세요.")
 
 st.markdown('<div style="text-align:center;padding:28px 0 10px;color:#9ca3af;font-size:11px;">© 2026 중소기업경영지원단 · 벤처인증 AI 마스터 컨설턴트</div>', unsafe_allow_html=True)
