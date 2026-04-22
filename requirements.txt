@@ -1,5 +1,6 @@
-streamlit
-streamlit-google-auth
-google-generativeai
-Pillow
-pdf2image
+streamlit>=1.30.0
+anthropic>=0.40.0
+Pillow>=10.0.0
+pandas>=2.0.0
+requests>=2.31.0
+pdf2image>=1.17.0
