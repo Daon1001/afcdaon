@@ -1,12 +1,15 @@
 import streamlit as st
 import google.generativeai as genai
-from PIL import Image
+from PIL import Image, ImageGrab  # ImageGrab 추가
 import io
 import pandas as pd
 import os
 import json
 import requests
 from datetime import datetime, date
+import time
+import pyautogui  # 화면 제어용 추가
+import pyperclip  # 한글 클립보드 복사-붙여넣기용 추가
 
 try:
     from pdf2image import convert_from_bytes
@@ -117,7 +120,6 @@ def save_db(db):
     gist_ok = gist_save(db)
     _save_local(db)
     st.session_state["gist_sync_failed"] = not gist_ok
-    # ★ session_state의 DB 캐시도 갱신
     st.session_state["user_db_cache"] = db
 
 def is_gist_connected():
@@ -138,7 +140,6 @@ def reset_monthly_usage(db):
         save_db(db)
     return db
 
-# ★ 수정: DB를 session_state에 캐싱하여 매번 Gist 호출 방지
 if "user_db_cache" not in st.session_state:
     st.session_state["user_db_cache"] = load_db()
 user_db = st.session_state["user_db_cache"]
@@ -353,21 +354,17 @@ if 'uploader_key' not in st.session_state:
     st.session_state.uploader_key = "1"
 if 'backup_dismissed' not in st.session_state:
     st.session_state.backup_dismissed = False
-# ★ 수정: AI 결과 저장용 session_state 명시 초기화
 if 'suggestions' not in st.session_state:
     st.session_state.suggestions = None
 if 'report_sections' not in st.session_state:
     st.session_state.report_sections = None
 
 MAX_MONTHLY_LIMIT = 30
-
-# ★ Gemini 무료 티어 일일 API 한도 (RPD)
-DAILY_API_LIMIT = 230  # 무료 250회 중 여유분 20회 확보
+DAILY_API_LIMIT = 230
 if 'daily_api_count' not in st.session_state:
     st.session_state.daily_api_count = 0
     st.session_state.daily_api_date = date.today().isoformat()
 
-# 날짜 바뀌면 일일 카운트 리셋
 if st.session_state.daily_api_date != date.today().isoformat():
     st.session_state.daily_api_count = 0
     st.session_state.daily_api_date = date.today().isoformat()
@@ -433,7 +430,6 @@ with st.sidebar:
         <div style="font-size:12px;margin-top:3px;opacity:0.7;">{usage} / {MAX_MONTHLY_LIMIT} 회</div>
     """, unsafe_allow_html=True)
 
-    # ★ 일일 API 잔여량 표시
     daily_used = st.session_state.daily_api_count
     daily_pct = min(daily_used / DAILY_API_LIMIT, 1.0)
     daily_color = "#4ade80" if daily_pct < 0.7 else ("#facc15" if daily_pct < 0.9 else "#f87171")
@@ -535,7 +531,6 @@ with st.sidebar:
                 except Exception:
                     st.error("JSON 파싱 실패")
 
-    # ★ 수정: DB 강제 새로고침 버튼 (관리자용)
     if current_user.get("is_admin"):
         st.divider()
         if st.button("🔄 DB 새로고침", use_container_width=True, key="refresh_db"):
@@ -588,7 +583,6 @@ if current_user.get("is_admin") and not is_gist_connected() and not st.session_s
             st.session_state.backup_dismissed = True
             st.rerun()
 
-# ★ 수정: "새 기업 컨설팅 시작" — uploader_key만 바꾸지 않고 결과만 초기화
 if st.button("🔄 새 기업 컨설팅 시작"):
     st.session_state.suggestions = None
     st.session_state.report_sections = None
@@ -616,7 +610,7 @@ with col1:
         if current_user.get("usage_count", 0) >= MAX_MONTHLY_LIMIT:
             st.error("월간 한도 초과")
         elif st.session_state.daily_api_count >= DAILY_API_LIMIT:
-            st.error("🚫 오늘 무료 API 한도를 모두 사용했습니다. 내일 자정(태평양 시간) 이후 다시 시도해주세요.")
+            st.error("🚫 오늘 무료 API 한도를 모두 사용했습니다.")
         else:
             with st.spinner('AI 분석 중...'):
                 prompt = f"""당신은 20년 경력의 벤처인증 전문 컨설턴트입니다.
@@ -624,7 +618,7 @@ with col1:
 각 주제: ① 기술명 ② 추천 사유 ③ 벤처인증 적합도
 {f'추가: {user_guide_rec}' if user_guide_rec else ''}"""
                 content = [prompt, analysis_content] if analysis_content else prompt
-                import time
+                
                 max_retries = 2
                 for attempt in range(max_retries):
                     try:
@@ -639,12 +633,11 @@ with col1:
                             st.warning(f"⏳ API 한도 감지, 30초 후 자동 재시도... ({attempt+1}/{max_retries})")
                             time.sleep(30)
                         elif "429" in str(e) or "ResourceExhausted" in str(e):
-                            st.session_state.daily_api_count = DAILY_API_LIMIT  # 한도 도달로 간주
-                            st.error("🚫 Google AI 무료 한도 초과. 내일 다시 시도하거나, Google AI Studio에서 빌링을 연결하면 한도가 크게 늘어납니다.")
+                            st.session_state.daily_api_count = DAILY_API_LIMIT
+                            st.error("🚫 Google AI 무료 한도 초과.")
                         else:
                             st.error(f"⚠️ 오류: {e}")
 
-    # ★ 수정: None 체크 추가
     if st.session_state.suggestions is not None:
         st.markdown(f'<div class="ai-result"><b>💡 AI 추천 기술 주제</b><br><br>{st.session_state.suggestions.replace(chr(10), "<br>")}</div>', unsafe_allow_html=True)
 
@@ -659,7 +652,7 @@ with col2:
         elif current_user.get("usage_count", 0) >= MAX_MONTHLY_LIMIT:
             st.error("월간 한도 초과")
         elif st.session_state.daily_api_count >= DAILY_API_LIMIT:
-            st.error("🚫 오늘 무료 API 한도를 모두 사용했습니다. 내일 자정(태평양 시간) 이후 다시 시도해주세요.")
+            st.error("🚫 오늘 무료 API 한도를 모두 사용했습니다.")
         else:
             with st.spinner('리포트 생성 중... (30초~1분)'):
                 form_prompt = f"""당신은 20년 경력의 벤처인증 전문 컨설턴트입니다.
@@ -693,7 +686,7 @@ V 당사 성과가 가능한 이유는 [핵심 역량]이 있기 때문이며 �
 ### [11. 연계 가능 정책자금 추천]
 """
                 content = [form_prompt, analysis_content] if analysis_content else form_prompt
-                import time
+                
                 max_retries = 2
                 for attempt in range(max_retries):
                     try:
@@ -709,14 +702,13 @@ V 당사 성과가 가능한 이유는 [핵심 역량]이 있기 때문이며 �
                             time.sleep(30)
                         elif "429" in str(e) or "ResourceExhausted" in str(e):
                             st.session_state.daily_api_count = DAILY_API_LIMIT
-                            st.error("🚫 Google AI 무료 한도 초과. 내일 다시 시도하거나, Google AI Studio에서 빌링을 연결하면 한도가 크게 늘어납니다.")
+                            st.error("🚫 Google AI 무료 한도 초과.")
                         else:
                             st.error(f"⚠️ 오류: {e}")
 
 # =====================================================================
 # 📄 리포트 출력
 # =====================================================================
-# ★ 수정: None 체크 추가
 if st.session_state.report_sections is not None:
     st.divider()
     st.markdown('<div class="sec-title"><h3>📄 마스터 리포트 결과</h3></div>', unsafe_allow_html=True)
@@ -745,5 +737,80 @@ if st.session_state.report_sections is not None:
                 st.markdown(f'<div class="rpt-body">{"".join(parts)}</div>', unsafe_allow_html=True)
             else:
                 st.markdown(f'<div class="rpt-body">{body.replace(chr(10), "<br>")}</div>', unsafe_allow_html=True)
+
+# =====================================================================
+# 🎯 Step 3: 화면 스캔 및 사이트 자동 입력 (RPA 기능 신규 통합)
+# =====================================================================
+st.divider()
+st.markdown('<div class="sec-title"><h3>🎯 Step 3 · 화면 스캔 및 사이트 자동 입력 (RPA)</h3></div>', unsafe_allow_html=True)
+
+col3_1, col3_2 = st.columns([2, 1])
+with col3_1:
+    st.info("""
+    **[스캔 및 자동 입력 사용 가이드]**
+    1. Step 1에서 **사업자등록증**이 업로드되어 있어야 합니다.
+    2. 벤처인증이나 기업부설연구소 신청 사이트를 띄우고, **내용을 입력할 칸을 마우스로 클릭(커서 깜빡임)** 해두세요.
+    3. 아래 버튼을 누르면 5초의 대기 시간이 주어집니다. 얼른 사이트 화면으로 전환하세요.
+    4. 5초 뒤 AI가 현재 화면의 문맥을 읽고 사업자등록증 정보를 바탕으로 알맞은 내용을 자동 타이핑합니다.
+    """)
+
+with col3_2:
+    if st.button("🚀 스캔 및 자동 작성 시작", type="primary", use_container_width=True):
+        if not analysis_content:
+            st.warning("⚠️ Step 1에서 사업자등록증을 먼저 업로드해주세요.")
+        elif current_user.get("usage_count", 0) >= MAX_MONTHLY_LIMIT:
+            st.error("🚫 월간 한도를 초과했습니다.")
+        elif st.session_state.daily_api_count >= DAILY_API_LIMIT:
+            st.error("🚫 오늘 무료 API 한도를 모두 사용했습니다.")
+        else:
+            # 5초 카운트다운 UI
+            progress_text = st.empty()
+            my_bar = st.progress(0)
+            
+            for percent_complete in range(5):
+                time.sleep(1)
+                my_bar.progress((percent_complete + 1) * 20)
+                progress_text.text(f"대상 화면으로 이동하세요! 캡처까지 {4 - percent_complete}초...")
+            
+            progress_text.text("📸 화면 스캔 및 AI 분석 중...")
+            
+            try:
+                # 현재 전체 화면 캡처
+                screen_img = ImageGrab.grab()
+                
+                # Gemini RPA 프롬프트
+                rpa_prompt = """당신은 중소기업 벤처인증 전문 컨설턴트입니다.
+                제공된 2개의 데이터를 분석하여 작업을 수행하세요.
+                [이미지 1]: 사업자등록증 데이터입니다. 업태와 종목을 확인하세요.
+                [이미지 2]: 사용자가 작성 중인 벤처인증/연구소 사이트 화면 스크린샷입니다. 입력 커서가 있는 곳의 제목이나 주변 문맥을 파악하세요.
+                
+                사업자등록증의 종목을 바탕으로 스크린샷 화면이 요구하는 문맥(예: 사업개요, 기술혁신성 등)에 맞게 300~500자 분량의 전문적인 내용을 작성하세요.
+                인사말이나 부가 설명은 절대 하지 말고, 오직 대상 입력창에 타이핑될 **본문 텍스트만** 출력하세요."""
+                
+                content = [rpa_prompt, analysis_content, screen_img]
+                
+                # AI 호출 및 API 카운트 차감
+                resp = model.generate_content(content)
+                st.session_state.daily_api_count += 1
+                user_db["users"][current_user_email]["usage_count"] += 1
+                save_db(user_db)
+                
+                generated_text = resp.text.strip()
+                
+                # 클립보드 복사 후 붙여넣기 실행 (한글 호환성)
+                pyperclip.copy(generated_text)
+                
+                # Mac OS 환경이라면 'ctrl' 대신 'command'로 수정 필요
+                pyautogui.hotkey('ctrl', 'v')
+                
+                progress_text.text("✅ 자동 작성이 완료되었습니다!")
+                st.success("대상 웹사이트에 아래 내용이 성공적으로 입력되었습니다.")
+                st.text_area("생성된 컨설팅 내용 백업 (수동 복사 가능)", generated_text, height=150)
+                st.balloons()
+                
+            except Exception as e:
+                progress_text.empty()
+                st.error(f"오류가 발생했습니다: {str(e)}")
+                st.warning("듀얼 모니터 환경이거나 화면 캡처 권한이 막혀 있는지 확인해주세요.")
 
 st.markdown('<div style="text-align:center;padding:28px 0 10px;color:#9ca3af;font-size:11px;">© 2026 중소기업경영지원단 · 벤처인증 AI 마스터 컨설턴트</div>', unsafe_allow_html=True)
