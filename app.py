@@ -210,6 +210,10 @@ if 'scan_results' not in st.session_state:
     st.session_state.scan_results = []  # 실시간 스캔 결과 누적 저장
 if 'admin_dashboard_mode' not in st.session_state:
     st.session_state.admin_dashboard_mode = False
+if 'picked_tech' not in st.session_state:
+    st.session_state.picked_tech = None
+if 'step2_topic' not in st.session_state:
+    st.session_state.step2_topic = ''
 
 MAX_MONTHLY_LIMIT = 30
 DAILY_API_LIMIT = 230
@@ -591,6 +595,8 @@ if current_user.get("is_admin"):
             st.session_state.suggestions = None
             st.session_state.report_sections = None
             st.session_state.scan_results = []
+            st.session_state.picked_tech = None
+            st.session_state.step2_topic = ''
             st.session_state.uploader_key = str(int(st.session_state.uploader_key) + 1)
             # 대시보드 모드도 해제
             st.session_state.admin_dashboard_mode = False
@@ -610,6 +616,8 @@ else:
         st.session_state.suggestions = None
         st.session_state.report_sections = None
         st.session_state.scan_results = []
+        st.session_state.picked_tech = None
+        st.session_state.step2_topic = ''
         st.session_state.uploader_key = str(int(st.session_state.uploader_key) + 1)
         st.rerun()
 
@@ -903,15 +911,44 @@ with col1:
             with st.spinner(f'AI 분석 중... ({target_model_name})'):
                 prompt = f"""당신은 20년 경력의 벤처인증 전문 컨설턴트입니다.
 [{biz_type}] 분야 기업에 대해 벤처인증에 적합한 기술 주제 3개를 추천하세요.
-각 주제: ① 기술명 ② 추천 사유 ③ 벤처인증 적합도
-{f'추가: {user_guide_rec}' if user_guide_rec else ''}"""
+{f'추가 지시사항: {user_guide_rec}' if user_guide_rec else ''}
+
+[출력 규칙]
+- 반드시 아래 JSON 형식으로만 출력 (마크다운 코드펜스 금지, 설명 금지)
+- 3개의 기술 주제를 배열로 제공
+- 각 기술명은 벤처인증 심사에서 통할 만큼 구체적이고 전문적으로
+
+[JSON 스키마]
+{{
+  "suggestions": [
+    {{
+      "tech_name": "구체적인 기술명 (예: 데이터기반 고강도·경량화 골판지 박스 구조 최적화 설계 기술)",
+      "reason": "추천 사유 (2-3문장)",
+      "fitness": "벤처인증 적합도 평가 (1-2문장)"
+    }},
+    {{...}},
+    {{...}}
+  ]
+}}
+"""
                 
                 max_retries = 2
                 last_error = None
                 for attempt in range(max_retries):
                     try:
                         result_text, in_tok, out_tok = claude_generate(prompt, analysis_content, max_tokens=2048)
-                        st.session_state.suggestions = result_text
+                        
+                        # JSON 파싱 시도 (마크다운 코드펜스 제거)
+                        clean_text = result_text.replace('```json', '').replace('```', '').strip()
+                        try:
+                            parsed = json.loads(clean_text)
+                            if 'suggestions' in parsed and isinstance(parsed['suggestions'], list):
+                                st.session_state.suggestions = parsed  # dict 저장
+                            else:
+                                st.session_state.suggestions = result_text  # 파싱 실패 시 원문
+                        except json.JSONDecodeError:
+                            st.session_state.suggestions = result_text  # 원문 저장
+                        
                         st.session_state.daily_api_count += 1
                         user_db["users"][current_user_email]["usage_count"] += 1
                         log_usage(user_db, current_user_email, "Step 1 (기술 주제 추천)", in_tok, out_tok, target_model_name)
@@ -948,15 +985,60 @@ with col1:
                 if last_error is None and st.session_state.suggestions:
                     st.success("✅ 생성 완료!")
 
+    # ── AI 추천 결과 표시 (JSON 파싱된 경우 카드 + 버튼, 아니면 원문) ──
     if st.session_state.suggestions is not None:
-        st.markdown(f'<div class="ai-result"><b>💡 AI 추천 기술 주제</b><br><br>{st.session_state.suggestions.replace(chr(10), "<br>")}</div>', unsafe_allow_html=True)
+        suggestions = st.session_state.suggestions
+        
+        # dict 형식 (파싱 성공) → 예쁜 카드 + 선택 버튼
+        if isinstance(suggestions, dict) and 'suggestions' in suggestions:
+            st.markdown('<div style="font-size:13px;font-weight:700;color:#92700c;margin:12px 0 6px;">💡 AI 추천 기술 주제 · 마음에 드는 걸 선택하세요</div>', unsafe_allow_html=True)
+            
+            for idx, sug in enumerate(suggestions['suggestions'], 1):
+                tech_name = sug.get('tech_name', '이름 없음')
+                reason = sug.get('reason', '')
+                fitness = sug.get('fitness', '')
+                
+                # 카드 스타일
+                st.markdown(f'''
+                <div style="background:linear-gradient(135deg,#fffdf5,#fefce8);border:1px solid #e5d9a8;border-left:4px solid #d4af37;border-radius:10px;padding:12px 16px;margin:10px 0 0;">
+                    <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
+                        <span style="background:#0b1f52;color:#d4af37;font-weight:700;font-size:11px;padding:3px 8px;border-radius:5px;">#{idx}</span>
+                        <span style="font-weight:700;color:#0b1f52;font-size:14px;">{tech_name}</span>
+                    </div>
+                    <div style="font-size:12.5px;color:#555;line-height:1.6;margin-top:4px;"><b>추천 사유:</b> {reason}</div>
+                    <div style="font-size:12.5px;color:#555;line-height:1.6;margin-top:3px;"><b>적합도:</b> {fitness}</div>
+                </div>
+                ''', unsafe_allow_html=True)
+                
+                # 선택 버튼
+                if st.button(f"→ 이 기술로 진행", key=f"pick_tech_{idx}", use_container_width=True):
+                    st.session_state['picked_tech'] = tech_name
+                    st.session_state['step2_topic'] = tech_name
+                    st.rerun()
+        else:
+            # 파싱 실패 시 원문 그대로 표시
+            raw_text = str(suggestions) if not isinstance(suggestions, str) else suggestions
+            st.markdown(f'<div class="ai-result"><b>💡 AI 추천 기술 주제</b><br><br>{raw_text.replace(chr(10), "<br>")}</div>', unsafe_allow_html=True)
+            st.caption("💡 위 추천 중 마음에 드는 기술명을 복사해서 오른쪽 Step 2 '확정 기술명'에 붙여넣거나, 원하는 기술명을 직접 입력하세요.")
 
 with col2:
     st.markdown('<div class="sec-title"><h3>📑 Step 2 · 마스터 리포트 생성</h3></div>', unsafe_allow_html=True)
-    selected_topic = st.text_input("확정 기술명", placeholder="예: 데이터기반 고강도·경량화 골판지 박스 구조 최적화 설계 기술", key=f"topic_{st.session_state.uploader_key}")
-    # Step 3에서 참조하기 위해 세션에 저장
+    
+    # AI 추천에서 선택된 기술이 있으면 입력창에 미리 채움 (직접 수정 가능)
+    _prefill = st.session_state.get('picked_tech', '') or st.session_state.get('step2_topic', '')
+    selected_topic = st.text_input(
+        "확정 기술명",
+        value=_prefill,
+        placeholder="예: 데이터기반 고강도·경량화 골판지 박스 구조 최적화 설계 기술",
+        key=f"topic_{st.session_state.uploader_key}",
+        help="AI 추천 중 선택 버튼을 누르면 자동으로 채워집니다. 직접 타이핑/수정도 가능해요."
+    )
+    # 사용자가 입력창을 수정하면 그 값을 세션에 반영
     if selected_topic:
         st.session_state['step2_topic'] = selected_topic
+        # picked_tech는 값이 바뀌었다면 해제 (그래야 다음 수정이 자유롭게 됨)
+        if st.session_state.get('picked_tech') and selected_topic != st.session_state.get('picked_tech'):
+            st.session_state['picked_tech'] = None
     user_guide_rep = st.text_area("리포트 지시사항 (선택)", placeholder="예: 시장규모 숫자 강조", key=f"gp_{st.session_state.uploader_key}", height=80)
 
     if st.button("🚀 마스터 리포트 생성", type="primary", use_container_width=True):
@@ -1059,23 +1141,24 @@ if st.session_state.report_sections is not None:
                 st.markdown(f'<div class="rpt-body">{body.replace(chr(10), "<br>")}</div>', unsafe_allow_html=True)
 
 # =====================================================================
-# 🎯 Step 3: 드래그 크롭 방식 — 입력란 영역 선택 → 정확한 문구 생성
+# 🎯 Step 3: 화면공유 + 캡처 버튼 방식 (안정 버전)
 # =====================================================================
 st.divider()
-st.markdown('<div class="sec-title"><h3>🎯 Step 3 · 영역 선택 자동 작성 (드래그 크롭 방식)</h3></div>', unsafe_allow_html=True)
+st.markdown('<div class="sec-title"><h3>🎯 Step 3 · 화면 캡처 AI 자동 작성</h3></div>', unsafe_allow_html=True)
 
 st.info("""
-**[사용법 — 초정확 영역 선택 방식]**
+**[사용법 — 화면 공유 + 캡처 버튼 방식]**
 1. **'🔴 화면 공유 시작'** 버튼 → 벤처인증 사이트 창/탭 선택 → 공유 시작
-2. 아래 **미리보기 화면**에서 작성하려는 **입력란 위에 마우스로 드래그**하여 노란 사각형을 그리세요.
-3. **'🔍 이 영역 분석'** 버튼을 누르면 해당 영역의 라벨/질문을 파악하고 **전문 문구**를 생성합니다.
-4. 다른 입력란으로 이동하려면 **다시 드래그**해서 영역을 새로 지정하세요 (자동 재분석 아님).
-5. 스크롤은 벤처인증 사이트에서 자유롭게 하세요. 화면이 바뀌면 미리보기도 자동으로 따라갑니다.
+2. 벤처인증 사이트에서 **작성할 입력란이 보이는 화면**까지 스크롤 이동
+3. **'📸 이 화면 분석'** 버튼 클릭 → 현재 공유중인 화면을 캡처해 AI에게 전송
+4. 아래에 생성된 문구 복사해서 벤처인증 사이트에 붙여넣기
+5. 다른 입력란으로 이동 → 다시 **'📸 이 화면 분석'** 클릭 (화면 공유는 유지됨)
+6. 작업 끝나면 **'⏹ 중지'** 클릭
 
-💡 **장점:** 전체 화면이 아닌 **선택 영역만** 전송하므로 API 비용이 약 **1/5~1/10** 로 절감되고, AI가 엉뚱한 입력란을 잡을 일이 없습니다.
+💡 **장점:** 드래그 없이 버튼 한 번이면 현재 화면의 모든 입력란을 AI가 분석합니다.
 """)
 
-# ── 드래그 크롭 컴포넌트 ──
+# ── 화면공유 + 캡처 컴포넌트 ──
 scan_component_html = """
 <div id="scan-root" style="font-family: 'Noto Sans KR', sans-serif;">
     <div style="display: flex; gap: 10px; align-items: center; margin-bottom: 12px; flex-wrap: wrap;">
@@ -1091,7 +1174,7 @@ scan_component_html = """
             box-shadow: 0px 4px 10px rgba(212,175,55,0.3);
         ">🔴 화면 공유 시작</button>
         
-        <button id="analyzeBtn" disabled style="
+        <button id="captureBtn" disabled style="
             padding: 12px 20px;
             background: #e5e7eb;
             color: #6b7280;
@@ -1100,7 +1183,7 @@ scan_component_html = """
             border: none;
             border-radius: 10px;
             cursor: not-allowed;
-        ">🔍 이 영역 분석</button>
+        ">📸 이 화면 분석</button>
         
         <button id="stopBtn" disabled style="
             padding: 12px 20px;
@@ -1125,220 +1208,63 @@ scan_component_html = """
         ">⚪ 대기 중 — 화면 공유를 시작하세요</div>
     </div>
     
-    <div id="preview-box" style="display: none; margin-top: 10px; position: relative;">
-        <div id="canvas-wrap" style="position: relative; display: inline-block; width: 100%; border-radius: 10px; overflow: hidden; border: 2px solid #d4af37; background: #000;">
-            <video id="video" autoplay playsinline style="display:none;"></video>
-            <canvas id="liveCanvas" style="display: block; width: 100%; height: auto; cursor: crosshair;"></canvas>
-            <div id="selection-box" style="
-                display: none;
-                position: absolute;
-                border: 3px dashed #d4af37;
-                background: rgba(212, 175, 55, 0.15);
-                pointer-events: none;
-                box-shadow: 0 0 0 9999px rgba(0,0,0,0.35);
-            "></div>
-            <div id="coord-label" style="
-                display: none;
-                position: absolute;
-                background: #0b1f52;
-                color: #d4af37;
-                font-size: 11px;
-                font-weight: 700;
-                padding: 2px 8px;
-                border-radius: 4px;
-                pointer-events: none;
-                z-index: 10;
-            "></div>
-        </div>
+    <div id="preview-box" style="display: none; margin-top: 10px;">
+        <video id="video" autoplay playsinline style="
+            width: 100%;
+            max-height: 400px;
+            border-radius: 10px;
+            border: 2px solid #d4af37;
+            background: #000;
+            object-fit: contain;
+        "></video>
         <div style="font-size: 11px; color: #9ca3af; margin-top: 6px;">
-            👆 위 화면에서 <b style="color:#d4af37;">작성할 입력란을 드래그</b>로 선택하세요. 선택 후 <b>[🔍 이 영역 분석]</b> 버튼을 누르면 분석됩니다.
+            👆 <b style="color:#d4af37;">공유 중인 화면</b> — 원하는 입력란 보이게 스크롤 후 <b>[📸 이 화면 분석]</b> 클릭
         </div>
     </div>
+    
+    <canvas id="hidden-canvas" style="display:none;"></canvas>
 </div>
 
 <script>
 (function() {
     const startBtn = document.getElementById('startBtn');
-    const analyzeBtn = document.getElementById('analyzeBtn');
+    const captureBtn = document.getElementById('captureBtn');
     const stopBtn = document.getElementById('stopBtn');
     const status = document.getElementById('status');
     const previewBox = document.getElementById('preview-box');
     const video = document.getElementById('video');
-    const liveCanvas = document.getElementById('liveCanvas');
-    const selectionBox = document.getElementById('selection-box');
-    const coordLabel = document.getElementById('coord-label');
-    const canvasWrap = document.getElementById('canvas-wrap');
+    const canvas = document.getElementById('hidden-canvas');
     
     let stream = null;
-    let drawLoopId = null;
-    let scanCount = 0;
-    
-    // 드래그 선택 상태
-    let isDrawing = false;
-    let startX = 0, startY = 0;
-    let currentRect = null;  // {x, y, w, h} in canvas pixel coordinates
+    let captureCount = 0;
     
     function setStatus(text, type) {
         status.innerHTML = text;
         const colors = {
             ready: ['#f3f4f6', '#6b7280'],
             live:  ['#d1fae5', '#065f46'],
-            warn:  ['#fef3c7', '#92400e'],
-            err:   ['#fee2e2', '#991b1b'],
-            sel:   ['#fef9c3', '#854d0e']
+            sending: ['#fef9c3', '#854d0e'],
+            err:   ['#fee2e2', '#991b1b']
         };
         const [bg, col] = colors[type] || colors.ready;
         status.style.background = bg;
         status.style.color = col;
     }
     
-    function enableAnalyzeBtn(enabled) {
-        analyzeBtn.disabled = !enabled;
+    function setCaptureEnabled(enabled) {
+        captureBtn.disabled = !enabled;
         if (enabled) {
-            analyzeBtn.style.background = 'linear-gradient(135deg, #d4af37 0%, #b8952e 100%)';
-            analyzeBtn.style.color = '#0b1f52';
-            analyzeBtn.style.cursor = 'pointer';
-            analyzeBtn.style.boxShadow = '0px 4px 10px rgba(212,175,55,0.3)';
+            captureBtn.style.background = 'linear-gradient(135deg, #d4af37 0%, #b8952e 100%)';
+            captureBtn.style.color = '#0b1f52';
+            captureBtn.style.cursor = 'pointer';
+            captureBtn.style.boxShadow = '0px 4px 10px rgba(212,175,55,0.3)';
         } else {
-            analyzeBtn.style.background = '#e5e7eb';
-            analyzeBtn.style.color = '#6b7280';
-            analyzeBtn.style.cursor = 'not-allowed';
-            analyzeBtn.style.boxShadow = 'none';
+            captureBtn.style.background = '#e5e7eb';
+            captureBtn.style.color = '#6b7280';
+            captureBtn.style.cursor = 'not-allowed';
+            captureBtn.style.boxShadow = 'none';
         }
     }
-    
-    // 실시간 비디오 → 캔버스 렌더링 (드래그 조작을 위해)
-    function drawLoop() {
-        if (!stream || !video.videoWidth) {
-            drawLoopId = requestAnimationFrame(drawLoop);
-            return;
-        }
-        // 캔버스 크기를 비디오 해상도에 맞춤 (한번만)
-        if (liveCanvas.width !== video.videoWidth) {
-            liveCanvas.width = video.videoWidth;
-            liveCanvas.height = video.videoHeight;
-        }
-        const ctx = liveCanvas.getContext('2d');
-        ctx.drawImage(video, 0, 0);
-        drawLoopId = requestAnimationFrame(drawLoop);
-    }
-    
-    // 화면 좌표 → 캔버스 픽셀 좌표 변환
-    function toCanvasCoords(clientX, clientY) {
-        const rect = liveCanvas.getBoundingClientRect();
-        const scaleX = liveCanvas.width / rect.width;
-        const scaleY = liveCanvas.height / rect.height;
-        return {
-            x: (clientX - rect.left) * scaleX,
-            y: (clientY - rect.top) * scaleY
-        };
-    }
-    
-    // 드래그 선택 UI 업데이트
-    function updateSelectionBox(cssX1, cssY1, cssX2, cssY2) {
-        const x = Math.min(cssX1, cssX2);
-        const y = Math.min(cssY1, cssY2);
-        const w = Math.abs(cssX2 - cssX1);
-        const h = Math.abs(cssY2 - cssY1);
-        selectionBox.style.display = 'block';
-        selectionBox.style.left = x + 'px';
-        selectionBox.style.top = y + 'px';
-        selectionBox.style.width = w + 'px';
-        selectionBox.style.height = h + 'px';
-        
-        coordLabel.style.display = 'block';
-        coordLabel.style.left = x + 'px';
-        coordLabel.style.top = (y - 22) + 'px';
-        coordLabel.textContent = `${Math.round(w)} × ${Math.round(h)} px`;
-    }
-    
-    // 마우스 이벤트 (드래그 선택)
-    liveCanvas.addEventListener('mousedown', (e) => {
-        if (!stream) return;
-        isDrawing = true;
-        const wrapRect = canvasWrap.getBoundingClientRect();
-        startX = e.clientX - wrapRect.left;
-        startY = e.clientY - wrapRect.top;
-        updateSelectionBox(startX, startY, startX, startY);
-        enableAnalyzeBtn(false);
-    });
-    
-    liveCanvas.addEventListener('mousemove', (e) => {
-        if (!isDrawing) return;
-        const wrapRect = canvasWrap.getBoundingClientRect();
-        const curX = e.clientX - wrapRect.left;
-        const curY = e.clientY - wrapRect.top;
-        updateSelectionBox(startX, startY, curX, curY);
-    });
-    
-    liveCanvas.addEventListener('mouseup', (e) => {
-        if (!isDrawing) return;
-        isDrawing = false;
-        const wrapRect = canvasWrap.getBoundingClientRect();
-        const endX = e.clientX - wrapRect.left;
-        const endY = e.clientY - wrapRect.top;
-        
-        // 너무 작으면 무시
-        if (Math.abs(endX - startX) < 15 || Math.abs(endY - startY) < 15) {
-            selectionBox.style.display = 'none';
-            coordLabel.style.display = 'none';
-            currentRect = null;
-            enableAnalyzeBtn(false);
-            setStatus('⚠️ 선택 영역이 너무 작습니다. 더 크게 드래그하세요.', 'warn');
-            return;
-        }
-        
-        // CSS 좌표 → 캔버스 픽셀 좌표 변환
-        const rect1 = toCanvasCoords(e.clientX - (endX - startX), e.clientY - (endY - startY));
-        const rect2 = toCanvasCoords(e.clientX, e.clientY);
-        currentRect = {
-            x: Math.min(rect1.x, rect2.x),
-            y: Math.min(rect1.y, rect2.y),
-            w: Math.abs(rect2.x - rect1.x),
-            h: Math.abs(rect2.y - rect1.y)
-        };
-        enableAnalyzeBtn(true);
-        setStatus(`✅ 영역 선택 완료 (${Math.round(currentRect.w)}×${Math.round(currentRect.h)}px) — [🔍 이 영역 분석] 버튼을 누르세요`, 'sel');
-    });
-    
-    liveCanvas.addEventListener('mouseleave', () => {
-        if (isDrawing) isDrawing = false;
-    });
-    
-    // 분석 버튼 — 선택 영역만 크롭해서 전송
-    analyzeBtn.onclick = () => {
-        if (!currentRect || !stream) return;
-        
-        // 오프스크린 캔버스로 크롭
-        const cropCanvas = document.createElement('canvas');
-        cropCanvas.width = Math.round(currentRect.w);
-        cropCanvas.height = Math.round(currentRect.h);
-        const cropCtx = cropCanvas.getContext('2d');
-        cropCtx.drawImage(
-            liveCanvas,
-            Math.round(currentRect.x), Math.round(currentRect.y),
-            Math.round(currentRect.w), Math.round(currentRect.h),
-            0, 0,
-            Math.round(currentRect.w), Math.round(currentRect.h)
-        );
-        
-        const imageData = cropCanvas.toDataURL('image/jpeg', 0.85);
-        scanCount++;
-        
-        setStatus(`🟢 스캔 #${scanCount} 전송 중... (${Math.round(currentRect.w)}×${Math.round(currentRect.h)}px)`, 'live');
-        
-        // Streamlit으로 전송
-        window.parent.postMessage({
-            type: 'streamlit:setComponentValue',
-            value: { image: imageData, timestamp: Date.now(), count: scanCount }
-        }, '*');
-        
-        // 전송 후엔 중복 전송 방지를 위해 분석 버튼 잠시 비활성화
-        enableAnalyzeBtn(false);
-        setTimeout(() => {
-            if (currentRect) enableAnalyzeBtn(true);
-        }, 3000);
-    };
     
     startBtn.onclick = async () => {
         try {
@@ -1359,13 +1285,17 @@ scan_component_html = """
             stopBtn.style.color = 'white';
             stopBtn.style.cursor = 'pointer';
             
-            setStatus('🟢 공유 중 — 미리보기에서 입력란을 드래그로 선택하세요', 'live');
+            // 비디오 로드 대기
+            await new Promise(resolve => {
+                if (video.videoWidth) return resolve();
+                video.onloadedmetadata = resolve;
+            });
             
-            // 브라우저에서 사용자가 직접 공유 중지 시
+            setCaptureEnabled(true);
+            setStatus('🟢 공유 중 — 원하는 화면으로 스크롤 후 [📸 이 화면 분석] 클릭', 'live');
+            
+            // 사용자가 브라우저에서 직접 공유 중지 시
             stream.getVideoTracks()[0].onended = () => { stopScan(); };
-            
-            // 렌더링 루프 시작 (비디오 → 캔버스)
-            drawLoop();
             
         } catch (err) {
             setStatus('❌ 화면 공유 권한 거부 또는 취소됨', 'err');
@@ -1373,29 +1303,60 @@ scan_component_html = """
         }
     };
     
+    captureBtn.onclick = () => {
+        if (!stream || !video.videoWidth) {
+            setStatus('⚠️ 화면 공유를 먼저 시작하세요', 'err');
+            return;
+        }
+        
+        // 현재 프레임 캡처
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(video, 0, 0);
+        
+        const imageData = canvas.toDataURL('image/jpeg', 0.85);
+        captureCount++;
+        
+        setStatus(`🟡 캡처 #${captureCount} AI에게 전송 중... (잠시만 기다리세요)`, 'sending');
+        
+        // 캡처 직후엔 잠시 버튼 비활성화 (중복 클릭 방지)
+        setCaptureEnabled(false);
+        setTimeout(() => {
+            if (stream) setCaptureEnabled(true);
+        }, 5000);
+        
+        // Streamlit으로 전송 (timestamp로 중복 방지, count로 식별)
+        window.parent.postMessage({
+            type: 'streamlit:setComponentValue',
+            value: { 
+                image: imageData, 
+                timestamp: Date.now(), 
+                count: captureCount,
+                width: video.videoWidth,
+                height: video.videoHeight
+            }
+        }, '*');
+    };
+    
     function stopScan() {
-        if (drawLoopId) cancelAnimationFrame(drawLoopId);
         if (stream) stream.getTracks().forEach(t => t.stop());
         stream = null;
-        drawLoopId = null;
         previewBox.style.display = 'none';
-        selectionBox.style.display = 'none';
-        coordLabel.style.display = 'none';
-        currentRect = null;
         
         startBtn.disabled = false;
         startBtn.style.background = 'linear-gradient(135deg, #d4af37 0%, #b8952e 100%)';
         startBtn.style.cursor = 'pointer';
         startBtn.style.boxShadow = '0px 4px 10px rgba(212,175,55,0.3)';
         
-        enableAnalyzeBtn(false);
+        setCaptureEnabled(false);
         
         stopBtn.disabled = true;
         stopBtn.style.background = '#e5e7eb';
         stopBtn.style.color = '#6b7280';
         stopBtn.style.cursor = 'not-allowed';
         
-        setStatus(`⚪ 중지됨 (총 ${scanCount}회 분석)`, 'ready');
+        setStatus(`⚪ 중지됨 (총 ${captureCount}회 캡처)`, 'ready');
     }
     
     stopBtn.onclick = stopScan;
@@ -1404,7 +1365,8 @@ scan_component_html = """
 """
 
 # 컴포넌트 실행 (높이 넉넉히 — 미리보기 영역 고려)
-captured_frame = components.html(scan_component_html, height=600)
+captured_frame = components.html(scan_component_html, height=550)
+
 
 # =====================================================================
 # 🧠 캡처된 크롭 영역 분석 로직
@@ -1445,24 +1407,27 @@ if frame_data and frame_data.get('timestamp', 0) > st.session_state.last_process
 {context_str}
 
 [작업]
-제공된 이미지는 사용자가 벤처인증/R&D/정책자금 신청 포털 화면에서 **마우스로 드래그하여 직접 선택한 특정 입력란 영역**입니다.
-이미지에는 보통 **1개의 입력란과 그 라벨(제목/질문)**이 포함되어 있습니다.
+제공된 이미지는 사용자가 벤처인증/R&D/정책자금 신청 포털 화면을 **현재 보고 있는 화면 전체**를 캡처한 것입니다.
+이미지 안에는 보통 **여러 개의 입력란(textarea, 질문 항목)**과 각각의 라벨(제목/질문)이 있습니다.
 
-1. 이미지에서 입력란의 **라벨(제목, 질문 문구)**을 정확히 찾아내세요.
-2. 해당 입력란에 들어갈 **전문적인 벤처인증 문구**를 작성하세요.
+1. 이미지에서 **모든 주요 입력란의 라벨(제목, 질문 문구)**을 찾아내세요.
+2. 각 입력란에 들어갈 **전문적인 벤처인증 문구**를 작성하세요.
+3. 현재 페이지의 전체 주제를 detected_page에 간단히 요약하세요.
 
 [출력 규칙]
 - 반드시 아래 JSON 형식으로만 출력 (마크다운 코드펜스 금지, 설명 금지)
-- content는 300~500자 분량의 전문 서술형
+- 입력란 **최대 8개**까지 (가장 중요한 것들 우선)
+- 각 content는 **200~400자** 분량의 전문 서술형
 - 지어낸 숫자/수치 금지, 일반적 업계 표현 사용
 - 인사말/안내멘트 금지, 즉시 붙여넣기 가능한 본문만
-- 라벨이 불명확하면 detected_page에 "라벨 불명확 — 재선택 권장"으로 표기
+- 입력란이 불명확하거나 텍스트 입력이 아닌 것(체크박스, 버튼 등)은 제외
 
 [JSON 스키마]
 {{
-  "detected_page": "파악한 입력란 라벨 (예: 기술의 독창성 서술)",
+  "detected_page": "화면의 전체 주제 (예: 기술혁신성 평가 페이지)",
   "fields": [
-    {{"label": "입력란 제목", "content": "작성 문구"}}
+    {{"label": "입력란 제목1", "content": "작성 문구1"}},
+    {{"label": "입력란 제목2", "content": "작성 문구2"}}
   ]
 }}
 """
@@ -1479,7 +1444,7 @@ if frame_data and frame_data.get('timestamp', 0) > st.session_state.last_process
                 in_tok = 0
                 out_tok = 0
                 try:
-                    raw_text, in_tok, out_tok = claude_generate(scan_prompt, analysis_extra, crop_img, max_tokens=2048)
+                    raw_text, in_tok, out_tok = claude_generate(scan_prompt, analysis_extra, crop_img, max_tokens=4096)
                 except anthropic.RateLimitError:
                     st.warning("⏳ Claude API Rate Limit. 잠시 후 다시 분석 버튼을 누르세요.")
                 except anthropic.APIStatusError as e:
