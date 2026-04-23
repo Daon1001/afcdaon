@@ -425,12 +425,55 @@ except Exception:
     st.error("⚠️ Secrets에서 anthropic_api_key를 찾을 수 없습니다.\n\n`.streamlit/secrets.toml`에 다음을 추가하세요:\n```\nanthropic_api_key = \"sk-ant-...\"\n```")
     st.stop()
 
-# 모델 선택 (우선순위: 품질 vs 비용 균형)
-# claude-sonnet-4-6: 추천 (품질 뛰어남, 비용 합리적, 비전 지원)
-# claude-opus-4-7: 최고 품질 (비용 5배), claude-haiku-4-5: 최저 비용(품질 낮음)
-target_model_name = st.secrets.get("claude_model", "claude-sonnet-4-6")
+# =====================================================================
+# 🎛️ 모델 선택 UI (사이드바 상단에 배치 — API 호출 전에 선정)
+# =====================================================================
+# 이용 가능한 모델 3종 (비용/품질 트레이드오프)
+MODEL_CHOICES = {
+    "⚡ 절약형 (Haiku 4.5)":    {"id": "claude-haiku-4-5-20251001", "desc": "빠르고 저렴",    "input": 1.00,  "output": 5.00},
+    "⭐ 균형형 (Sonnet 4.6)":   {"id": "claude-sonnet-4-6",          "desc": "최적 가성비",   "input": 3.00,  "output": 15.00},
+    "👑 최고급 (Opus 4.7)":     {"id": "claude-opus-4-7",             "desc": "최상급 품질",   "input": 5.00,  "output": 25.00},
+}
+
+# 기본값은 Secrets 또는 Sonnet
+_default_model_id = st.secrets.get("claude_model", "claude-sonnet-4-6")
+_default_label = "⭐ 균형형 (Sonnet 4.6)"
+for label, info in MODEL_CHOICES.items():
+    if info["id"] == _default_model_id:
+        _default_label = label
+        break
+
+# 세션 초기화
+if 'selected_model_label' not in st.session_state:
+    st.session_state.selected_model_label = _default_label
+
+with st.sidebar:
+    st.divider()
+    st.markdown('<p style="font-size:11px;color:#d4af37;letter-spacing:2px;font-weight:700;margin-bottom:4px;">🤖 AI 품질 선택</p>', unsafe_allow_html=True)
+    
+    selected_label = st.radio(
+        "모델",
+        list(MODEL_CHOICES.keys()),
+        index=list(MODEL_CHOICES.keys()).index(st.session_state.selected_model_label),
+        label_visibility="collapsed",
+        key="model_radio"
+    )
+    st.session_state.selected_model_label = selected_label
+    
+    _info = MODEL_CHOICES[selected_label]
+    target_model_name = _info["id"]
+    
+    # 선택한 모델 정보 카드
+    st.markdown(f"""
+    <div style="background:rgba(212,175,55,0.08);border:1px solid rgba(212,175,55,0.25);border-radius:8px;padding:8px 10px;margin-top:6px;font-size:11px;">
+        <div style="color:#d4af37;font-weight:700;">{_info['desc']}</div>
+        <div style="opacity:0.7;margin-top:3px;">입력 ${_info['input']} · 출력 ${_info['output']} /1M</div>
+        <div style="opacity:0.6;margin-top:2px;font-family:monospace;font-size:10px;">{target_model_name}</div>
+    </div>
+    """, unsafe_allow_html=True)
+
+
 model_name = target_model_name  # 호환성을 위해 기존 변수명 유지
-st.sidebar.caption(f"🤖 엔진: `{target_model_name}`")
 
 
 # ── Claude 호출 헬퍼 함수 ──
@@ -707,6 +750,27 @@ if current_user.get("is_admin") and st.session_state.admin_dashboard_mode:
                 step_cost.columns = ['step', '비용(USD)']
                 st.bar_chart(step_cost.set_index('step'))
             
+            # ── 모델별 사용 분포 (여러 모델 사용 시에만) ──
+            if 'model' in filtered.columns and filtered['model'].nunique() > 1:
+                st.markdown('<div style="font-size:14px;font-weight:700;color:#0b1f52;margin:18px 0 8px;">🤖 모델별 사용 비율</div>', unsafe_allow_html=True)
+                _model_short = {
+                    "claude-opus-4-7": "👑 Opus 4.7",
+                    "claude-opus-4-6": "👑 Opus 4.6",
+                    "claude-sonnet-4-6": "⭐ Sonnet 4.6",
+                    "claude-haiku-4-5-20251001": "⚡ Haiku 4.5",
+                }
+                mc1, mc2 = st.columns(2)
+                with mc1:
+                    st.caption("📞 모델별 호출 횟수")
+                    model_cnt = filtered.copy()
+                    model_cnt['모델'] = model_cnt['model'].apply(lambda x: _model_short.get(x, x))
+                    st.bar_chart(model_cnt.groupby('모델').size())
+                with mc2:
+                    st.caption("💰 모델별 누적 비용 (USD)")
+                    model_cost_df = filtered.copy()
+                    model_cost_df['모델'] = model_cost_df['model'].apply(lambda x: _model_short.get(x, x))
+                    st.bar_chart(model_cost_df.groupby('모델')['cost_usd'].sum())
+            
             # ── 3. 일별 추이 ──
             st.markdown('<div style="font-size:14px;font-weight:700;color:#0b1f52;margin:18px 0 8px;">📈 일별 사용 추이</div>', unsafe_allow_html=True)
             daily = filtered.groupby('date').agg(호출수=('ts', 'count'), 비용USD=('cost_usd', 'sum')).reset_index()
@@ -751,8 +815,16 @@ if current_user.get("is_admin") and st.session_state.admin_dashboard_mode:
                 detail = filtered.sort_values('ts', ascending=False).copy()
                 detail['시각'] = detail['ts'].dt.strftime('%Y-%m-%d %H:%M:%S')
                 detail['비용($)'] = detail['cost_usd'].apply(lambda x: f"${x:.5f}")
-                detail_display = detail[['시각', 'email', 'step', 'in_tokens', 'out_tokens', '비용($)']].copy()
-                detail_display.columns = ['시각', '이메일', '기능', '입력토큰', '출력토큰', '비용($)']
+                # 모델명을 읽기 쉽게 축약
+                _model_short = {
+                    "claude-opus-4-7": "👑 Opus 4.7",
+                    "claude-opus-4-6": "👑 Opus 4.6",
+                    "claude-sonnet-4-6": "⭐ Sonnet 4.6",
+                    "claude-haiku-4-5-20251001": "⚡ Haiku 4.5",
+                }
+                detail['모델'] = detail['model'].apply(lambda x: _model_short.get(x, x))
+                detail_display = detail[['시각', 'email', 'step', '모델', 'in_tokens', 'out_tokens', '비용($)']].copy()
+                detail_display.columns = ['시각', '이메일', '기능', '모델', '입력토큰', '출력토큰', '비용($)']
                 st.dataframe(detail_display, use_container_width=True, hide_index=True)
             
             # ── 6. CSV 다운로드 ──
@@ -820,18 +892,22 @@ with col1:
     user_guide_rec = st.text_area("추천 가이드 (선택)", placeholder="예: ESG 강조, 수출 중심", key=f"gr_{st.session_state.uploader_key}", height=80)
 
     if st.button("✨ AI 기술 주제 추천", type="primary", use_container_width=True):
+        # 🔥 버튼 클릭 즉시 피드백 표시 (디버깅용)
+        st.info(f"🔄 버튼 감지됨 · 모델: `{target_model_name}` · 업종: {biz_type}")
+        
         if current_user.get("usage_count", 0) >= MAX_MONTHLY_LIMIT:
             st.error("월간 한도 초과")
         elif st.session_state.daily_api_count >= DAILY_API_LIMIT:
             st.error("🚫 오늘 API 한도를 모두 사용했습니다.")
         else:
-            with st.spinner('AI 분석 중...'):
+            with st.spinner(f'AI 분석 중... ({target_model_name})'):
                 prompt = f"""당신은 20년 경력의 벤처인증 전문 컨설턴트입니다.
 [{biz_type}] 분야 기업에 대해 벤처인증에 적합한 기술 주제 3개를 추천하세요.
 각 주제: ① 기술명 ② 추천 사유 ③ 벤처인증 적합도
 {f'추가: {user_guide_rec}' if user_guide_rec else ''}"""
                 
                 max_retries = 2
+                last_error = None
                 for attempt in range(max_retries):
                     try:
                         result_text, in_tok, out_tok = claude_generate(prompt, analysis_content, max_tokens=2048)
@@ -840,23 +916,37 @@ with col1:
                         user_db["users"][current_user_email]["usage_count"] += 1
                         log_usage(user_db, current_user_email, "Step 1 (기술 주제 추천)", in_tok, out_tok, target_model_name)
                         save_db(user_db)
+                        last_error = None
                         break
-                    except anthropic.RateLimitError:
+                    except anthropic.RateLimitError as e:
+                        last_error = e
                         if attempt < max_retries - 1:
                             st.warning(f"⏳ Rate Limit 감지, 30초 후 재시도... ({attempt+1}/{max_retries})")
                             time.sleep(30)
                         else:
                             st.error("🚫 Claude API Rate Limit 초과. 잠시 후 다시 시도하세요.")
                     except anthropic.APIStatusError as e:
+                        last_error = e
                         if e.status_code == 429:
                             st.session_state.daily_api_count = DAILY_API_LIMIT
                             st.error("🚫 API 한도 초과 또는 크레딧 부족. [console.anthropic.com](https://console.anthropic.com)에서 확인하세요.")
+                        elif e.status_code == 401:
+                            st.error("🚫 API 키 인증 실패. Streamlit Secrets의 `anthropic_api_key` 값을 확인하세요.")
+                        elif e.status_code == 400:
+                            st.error(f"🚫 잘못된 요청 (400): {e.message}")
                         else:
                             st.error(f"⚠️ API 오류 ({e.status_code}): {e.message}")
                         break
                     except Exception as e:
-                        st.error(f"⚠️ 오류: {e}")
+                        last_error = e
+                        import traceback
+                        st.error(f"⚠️ 예외 발생: `{type(e).__name__}` — {str(e)}")
+                        with st.expander("🔍 전체 에러 트레이스백 보기"):
+                            st.code(traceback.format_exc(), language="python")
                         break
+                
+                if last_error is None and st.session_state.suggestions:
+                    st.success("✅ 생성 완료!")
 
     if st.session_state.suggestions is not None:
         st.markdown(f'<div class="ai-result"><b>💡 AI 추천 기술 주제</b><br><br>{st.session_state.suggestions.replace(chr(10), "<br>")}</div>', unsafe_allow_html=True)
