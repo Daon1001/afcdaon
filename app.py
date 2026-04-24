@@ -42,7 +42,6 @@ def load_db():
         except: pass
     if os.path.exists(DB_FILE):
         with open(DB_FILE, 'r', encoding='utf-8') as f: return json.load(f)
-    # 기본 계정 생성
     return {"users": {"incheon00@gmail.com": {"approved": True, "is_admin": True, "usage_count": 0, "last_reset_month": date.today().month}}, "usage_logs": []}
 
 def save_db(db):
@@ -70,61 +69,67 @@ def get_base64_encoded_image(image_path):
             return base64.b64encode(img_file.read()).decode('utf-8')
     return ""
 
-# 파일명은 실제 대표님 환경에 맞게 유지
 LOGO_BASE64 = get_base64_encoded_image("프로필이미지.jpg")
 BANNER_BASE64 = get_base64_encoded_image("배너광고1.jpg")
 
 # =====================================================================
-# 📄 디자인 리포트 HTML 생성 (로고/배너 포함)
+# 📄 디자인 리포트 HTML 생성 (A4 인쇄 최적화)
 # =====================================================================
 def generate_branded_html(topic, sections):
     logo_img = f"data:image/jpeg;base64,{LOGO_BASE64}" if LOGO_BASE64 else ""
     banner_img = f"data:image/jpeg;base64,{BANNER_BASE64}" if BANNER_BASE64 else ""
     
+    # A4 사이즈(210mm x 297mm)로 완벽히 맞춘 CSS
     css = """
-    @page { size: 1330px 940px; margin: 0; }
+    @page { size: A4 portrait; margin: 0; }
     body { font-family: 'Pretendard', 'Noto Sans KR', sans-serif; background: #E8E0E0; margin: 0; padding: 20px; display: flex; flex-direction: column; align-items: center; }
-    .page { width: 1330px; height: 940px; background: white; margin-bottom: 20px; box-shadow: 0 10px 30px rgba(0,0,0,0.1); position: relative; overflow: hidden; page-break-after: always; display: flex; flex-direction: column; }
     
-    /* 인쇄 시 여백/배경색 최적화 */
+    /* A4 용지 규격 1장 셋팅 */
+    .page { width: 210mm; min-height: 297mm; background: white; margin-bottom: 20px; box-shadow: 0 10px 30px rgba(0,0,0,0.1); display: flex; flex-direction: column; position: relative; page-break-after: always; box-sizing: border-box; overflow: hidden; }
+    
+    /* 인쇄 시 브라우저 여백 제거 및 배경색 강제 적용 */
     @media print {
         body { background: white !important; padding: 0 !important; }
-        .page { box-shadow: none; margin-bottom: 0; }
+        .page { box-shadow: none !important; margin: 0 !important; page-break-after: always; }
         .cover { background: linear-gradient(135deg, #0b1f52 0%, #1a3a7a 100%) !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
     }
     
-    /* 표지 디자인 */
+    /* 표지 디자인 (A4 비율에 맞춤) */
     .cover { background: linear-gradient(135deg, #0b1f52 0%, #1a3a7a 100%); color: white; justify-content: center; align-items: center; text-align: center; }
-    .cover-logo { width: 150px; height: 150px; border-radius: 50%; border: 4px solid #d4af37; margin-bottom: 30px; object-fit: cover; }
-    .cover-title { font-size: 55px; font-weight: 900; color: #d4af37; margin-bottom: 10px; letter-spacing: 2px; }
-    .cover-subtitle { font-size: 32px; font-weight: 300; opacity: 0.9; }
+    .cover-logo { width: 130px; height: 130px; border-radius: 50%; border: 4px solid #d4af37; margin-bottom: 40px; object-fit: cover; background: white; box-shadow: 0 4px 15px rgba(0,0,0,0.3); }
+    .cover-title { font-size: 42px; font-weight: 900; color: #d4af37; margin-bottom: 15px; letter-spacing: 3px; }
+    .cover-subtitle { font-size: 28px; font-weight: 700; margin-bottom: 50px; }
+    .cover-topic { font-size: 20px; padding: 20px 40px; border-top: 1px solid rgba(255,255,255,0.2); }
     
     /* 내용 페이지 디자인 */
-    .header { padding: 30px 60px; border-bottom: 2px solid #f0f2f5; display: flex; align-items: center; gap: 20px; }
-    .header-logo { width: 50px; height: 50px; border-radius: 50%; border: 2px solid #d4af37; object-fit: cover; }
-    .content { padding: 50px 80px; flex: 1; font-size: 18px; line-height: 1.8; color: #333; overflow-y: auto; }
+    .header { padding: 15mm 20mm 5mm; border-bottom: 2px solid #f0f2f5; display: flex; align-items: center; gap: 15px; }
+    .header-logo { width: 45px; height: 45px; border-radius: 50%; border: 2px solid #d4af37; object-fit: cover; background: white; }
+    .section-title { font-size: 22px; font-weight: 800; color: #0b1f52; }
     
-    /* 하단 배너 고정 */
-    .footer-banner { width: 100%; height: 100px; object-fit: cover; border-top: 1px solid #eee; }
+    /* 본문 영역 (배너를 밀어내기 위해 flex: 1 사용) */
+    .content { padding: 10mm 20mm; flex: 1; font-size: 15px; line-height: 1.7; color: #333; }
     
-    .v-item { background: #f8faff; border-left: 6px solid #d4af37; padding: 25px; margin-bottom: 20px; border-radius: 10px; font-weight: 500; display: flex; gap: 15px; }
-    .section-title { font-size: 28px; font-weight: 800; color: #0b1f52; }
-    .sub-point { font-weight: 800; color: #1a3a7a; margin: 25px 0 10px; font-size: 20px; display: block; }
+    /* 하단 배너 고정 (A4 하단에 딱 맞게) */
+    .footer-banner { width: 100%; height: 35mm; object-fit: cover; border-top: 2px solid #d4af37; margin-top: auto; }
+    
+    .v-item { background: #f8faff; border-left: 5px solid #d4af37; padding: 15px; margin-bottom: 15px; border-radius: 8px; display: flex; gap: 12px; }
+    .v-item b { color: #0b1f52; font-size: 18px; }
+    .sub-point { font-weight: 800; color: #1a3a7a; margin: 20px 0 8px; font-size: 17px; display: block; }
     """
 
     html = f"<html><head><meta charset='utf-8'><style>{css}</style></head><body>"
     
-    # 1. 표지
+    # 1. 표지 (A4 사이즈 1장)
     html += f"""
     <div class="page cover">
         <img src="{logo_img}" class="cover-logo" alt="로고">
         <div class="cover-title">중소기업경영지원단</div>
         <div class="cover-subtitle">벤처인증 마스터 컨설팅 리포트</div>
-        <div style="margin-top:50px; font-size:24px; border-top:1px solid rgba(255,255,255,0.2); padding-top:20px;">{topic}</div>
+        <div class="cover-topic">{topic}</div>
     </div>
     """
 
-    # 2. 내용 페이지 생성
+    # 2. 내용 페이지 (각 항목마다 새로운 A4 용지 1장씩 할당)
     for section in sections:
         if not section.strip(): continue
         lines = section.split('\n', 1)
@@ -136,12 +141,13 @@ def generate_branded_html(topic, sections):
             s = line.strip()
             if not s: continue
             if s.startswith('V '): 
-                body_html += f'<div class="v-item"><b style="color:#0b1f52; font-size:20px;">V</b> <div>{s[2:]}</div></div>'
+                body_html += f'<div class="v-item"><b style="color:#0b1f52; font-size:18px;">V</b> <div>{s[2:]}</div></div>'
             elif s.startswith('- ') or s.startswith('•'): 
                 body_html += f'<span class="sub-point">{s}</span>'
             else: 
-                body_html += f'<div style="margin-bottom:10px;">{s}</div>'
+                body_html += f'<div style="margin-bottom:8px;">{s}</div>'
 
+        # 각 항목별로 독립된 div.page 생성 (인쇄 시 자동 페이지 분할)
         html += f"""
         <div class="page">
             <div class="header">
@@ -194,7 +200,7 @@ if st.session_state.authenticated_user is None:
             st.rerun()
     st.stop()
 
-st.markdown('<div class="dash-header"><h1>🏛️ 벤처인증 AI 마스터 컨설턴트</h1><p>부자들의 비밀금고 · <b>디자인 & 복사 통합 모드</b></p></div>', unsafe_allow_html=True)
+st.markdown('<div class="dash-header"><h1>🏛️ 벤처인증 AI 마스터 컨설턴트</h1><p>부자들의 비밀금고 · <b>A4 인쇄 & 복사 통합 모드</b></p></div>', unsafe_allow_html=True)
 
 with st.sidebar:
     st.markdown(f"**👤 {st.session_state.authenticated_user}**")
@@ -230,7 +236,6 @@ with col2:
             st.warning("기술명을 먼저 입력해주세요.")
         else:
             with st.spinner("리포트를 생성 중입니다. (약 1분 소요)..."):
-                # 표 사용 금지 및 11개 항목 강제 프롬프트
                 prompt = f"""
                 기술명: [{topic}]
                 이 기술에 대해 벤처인증 심사용 사업계획서 11개 항목을 아주 구체적으로 작성하라.
@@ -251,10 +256,10 @@ if "sections" in st.session_state:
     st.divider()
     st.subheader("📄 생성 결과 확인")
     
-    # 1. HTML 다운로드 (로고/배너 포함 디자인)
+    # 1. HTML 다운로드 (A4 인쇄용 디자인)
     html_content = generate_branded_html(topic, st.session_state.sections)
     st.download_button(
-        label="💾 디자인 리포트 HTML 다운로드 (대표님 보고용)",
+        label="💾 A4 인쇄용 디자인 리포트 다운로드 (.html)",
         data=html_content,
         file_name=f"벤처인증_리포트_{topic}.html",
         mime="text/html",
