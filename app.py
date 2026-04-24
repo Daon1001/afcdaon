@@ -176,11 +176,6 @@ section[data-testid="stSidebar"] hr { border-color: rgba(255,255,255,0.15) !impo
 .ai-result { background: linear-gradient(135deg, #fffdf5, #fefce8); border: 1px solid #e5d9a8; border-left: 5px solid #d4af37; border-radius: 12px; padding: 20px 22px; margin-top: 14px; line-height: 1.85; font-size: 14px; color: #1f2937; }
 .ai-result b { color: #92700c; }
 
-.rpt-body { background: white; border: 1px solid #e5e7eb; border-left: 5px solid #0b1f52; border-radius: 12px; padding: 20px 22px; line-height: 1.85; font-size: 14px; color: #374151; }
-
-.v-item { display: flex; align-items: flex-start; gap: 10px; margin-bottom: 8px; padding: 8px 12px; background: #f0f4ff; border-radius: 8px; font-size: 13.5px; line-height: 1.7; color: #374151; }
-.v-badge { flex-shrink: 0; width: 24px; height: 24px; background: #0b1f52; color: #d4af37; font-weight: 900; font-size: 13px; border-radius: 5px; display: flex; align-items: center; justify-content: center; margin-top: 2px; }
-
 [data-testid="stBaseButton-primary"] { background: linear-gradient(135deg, #d4af37 0%, #b8952e 100%) !important; color: #0b1f52 !important; font-weight: 700 !important; border: none !important; border-radius: 10px !important; }
 
 .stTextInput input, .stTextArea textarea { border-radius: 10px !important; border: 1.5px solid #d1d5db !important; }
@@ -192,6 +187,116 @@ section[data-testid="stSidebar"] hr { border-color: rgba(255,255,255,0.15) !impo
 .login-hero .sub { font-size: 13px; color: rgba(255,255,255,0.65); }
 </style>
 """, unsafe_allow_html=True)
+
+# =====================================================================
+# HTML 템플릿 생성 헬퍼 함수
+# =====================================================================
+def generate_html_report(topic, sections):
+    css = """
+    @page { size: 1330px 940px; margin: 0; }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'Pretendard Variable', 'Noto Sans KR', sans-serif; font-size: 14px; color: #1A1A1A; line-height: 1.55; background: #E8E0E0; display: flex; flex-direction: column; align-items: center; padding: 10px 0; letter-spacing: -0.1px; }
+    .page { width: 1330px; height: 940px; page-break-after: always; page-break-inside: avoid; position: relative; overflow: hidden; background: white; margin-bottom: 8px; box-shadow: 0 2px 12px rgba(0,0,0,0.08); }
+    @media print {
+        * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; color-adjust: exact !important; }
+        body { background: white !important; padding: 0 !important; }
+        .page { height: 940px; overflow: hidden; margin-bottom: 0; box-shadow: none; page-break-after: always; page-break-inside: avoid; }
+        .page:last-child { page-break-after: avoid; }
+        .cover-page { background: linear-gradient(135deg, #0A1628 0%, #0F2847 40%, #1B3A6B 100%) !important; }
+    }
+    .cover-page { background: linear-gradient(135deg, #0A1628 0%, #0F2847 40%, #1B3A6B 100%); display: flex; flex-direction: column; align-items: center; justify-content: center; }
+    .gold-deco { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 1; }
+    .cover-bg { padding: 60px 100px; color: white; height: 85%; position: relative; z-index: 2; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+    .cover-brand { font-size: 50px; font-weight: 900; letter-spacing: 10px; background: linear-gradient(180deg, #F4D98A 0%, #C9A961 50%, #8B6F3E 100%); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; color: #C9A961; margin-bottom: 16px; }
+    .cover-title { font-size: 40px; font-weight: 700; margin-bottom: 32px; letter-spacing: 5px; color: white; }
+    .cover-company { font-size: 24px; font-weight: 300; color: rgba(255,255,255,0.88); letter-spacing: 2px; }
+    
+    .content-page { padding: 0; display: flex; flex-direction: column; }
+    .page-header { display: flex; align-items: center; gap: 14px; padding: 24px 50px; border-bottom: 2px solid #E2E8F0; position: relative; }
+    .page-header::after { content: ''; position: absolute; bottom: -2px; left: 0; width: 120px; height: 2px; background: linear-gradient(90deg, #C9A961, transparent); }
+    .page-title-main { font-size: 26px; font-weight: 800; color: #0F2847; letter-spacing: -0.3px; }
+    .page-body { padding: 30px 50px; flex: 1; overflow-y: auto; }
+    
+    .v-item { display: flex; align-items: flex-start; gap: 12px; margin-bottom: 12px; padding: 14px 18px; background: #F0F4F9; border-radius: 8px; font-size: 15px; line-height: 1.7; color: #1A1A1A; border-left: 4px solid #C9A961; }
+    .v-badge { flex-shrink: 0; width: 28px; height: 28px; background: linear-gradient(135deg, #0F2847, #1B3A6B); color: white; font-weight: 900; font-size: 14px; border-radius: 5px; display: flex; align-items: center; justify-content: center; margin-top: 2px; }
+    .text-line { margin-bottom: 8px; line-height: 1.65; font-size: 15px; color: #333; }
+    .bold-line { font-weight: 800; color: #0F2847; margin: 20px 0 8px; font-size: 17px; }
+    .logo-svg { width: 45px; height: 45px; flex-shrink: 0; }
+    """
+
+    html_parts = []
+    html_parts.append(f"""<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<link href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+<title>벤처인증 마스터 리포트</title>
+<style>{css}</style>
+</head>
+<body>
+    <div class="page cover-page">
+        <svg class="gold-deco" viewBox="0 0 1330 940" xmlns="http://www.w3.org/2000/svg">
+            <defs>
+                <linearGradient id="goldGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                    <stop offset="0%" stop-color="#C9A961" stop-opacity="0.6"/>
+                    <stop offset="100%" stop-color="#8B6F3E" stop-opacity="0.15"/>
+                </linearGradient>
+            </defs>
+            <circle cx="1330" cy="0" r="420" fill="none" stroke="url(#goldGrad)" stroke-width="1"/>
+            <circle cx="1330" cy="0" r="520" fill="none" stroke="url(#goldGrad)" stroke-width="0.8" opacity="0.6"/>
+            <circle cx="0" cy="940" r="380" fill="none" stroke="url(#goldGrad)" stroke-width="1" opacity="0.5"/>
+            <line x1="1100" y1="0" x2="1330" y2="230" stroke="#C9A961" stroke-width="1" opacity="0.25"/>
+        </svg>
+        <div class="cover-bg">
+            <svg style="width:100px;height:100px;margin-bottom:20px;filter: drop-shadow(0 6px 20px rgba(201,169,97,0.4));" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <rect width="40" height="40" rx="8" fill="#1B3A6B" stroke="#C9A961" stroke-width="2"/>
+                <path d="M20 8L32 20L20 32L8 20L20 8Z" fill="#C9A961"/>
+                <circle cx="20" cy="20" r="4" fill="white"/>
+            </svg>
+            <div class="cover-brand">중소기업경영지원단</div>
+            <div style="width: 80px; height: 2px; background: linear-gradient(90deg, transparent, #C9A961, transparent); margin: 0 auto 28px;"></div>
+            <div class="cover-title">벤처인증 마스터 리포트</div>
+            <div class="cover-company">{topic}</div>
+        </div>
+    </div>
+""")
+
+    for section in sections:
+        if not section.strip(): continue
+        lines = section.split('\n', 1)
+        title = lines[0].strip('[] #')
+        body = lines[1] if len(lines) > 1 else ""
+        if not title.strip(): continue
+
+        body_html = ""
+        for line in body.split('\n'):
+            s = line.strip()
+            if not s: continue
+            if s.startswith('V ') or s.startswith('V\u3000'):
+                body_html += f'<div class="v-item"><span class="v-badge">V</span><span>{s[2:]}</span></div>\n'
+            elif s.startswith('- ') or s.startswith('-'):
+                body_html += f'<div class="bold-line">{s}</div>\n'
+            else:
+                body_html += f'<div class="text-line">{s}</div>\n'
+
+        html_parts.append(f"""
+    <div class="page content-page">
+        <div class="page-header">
+            <svg class="logo-svg" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <rect width="40" height="40" rx="8" fill="#1B3A6B"/>
+                <path d="M20 10L30 20L20 30L10 20L20 10Z" fill="#C9A961"/>
+            </svg>
+            <div class="page-title-main">{title}</div>
+        </div>
+        <div class="page-body">
+            {body_html}
+        </div>
+    </div>
+        """)
+
+    html_parts.append("</body>\n</html>")
+    return "\n".join(html_parts)
 
 # =====================================================================
 # 세션 초기화
@@ -206,8 +311,6 @@ if 'suggestions' not in st.session_state:
     st.session_state.suggestions = None
 if 'report_sections' not in st.session_state:
     st.session_state.report_sections = None
-if 'scan_results' not in st.session_state:
-    st.session_state.scan_results = []  # 실시간 스캔 결과 누적 저장
 if 'admin_dashboard_mode' not in st.session_state:
     st.session_state.admin_dashboard_mode = False
 if 'picked_tech' not in st.session_state:
@@ -432,14 +535,12 @@ except Exception:
 # =====================================================================
 # 🎛️ 모델 선택 UI (사이드바 상단에 배치 — API 호출 전에 선정)
 # =====================================================================
-# 이용 가능한 모델 3종 (비용/품질 트레이드오프)
 MODEL_CHOICES = {
     "⚡ 절약형 (Haiku 4.5)":    {"id": "claude-haiku-4-5-20251001", "desc": "빠르고 저렴",    "input": 1.00,  "output": 5.00},
     "⭐ 균형형 (Sonnet 4.6)":   {"id": "claude-sonnet-4-6",          "desc": "최적 가성비",   "input": 3.00,  "output": 15.00},
     "👑 최고급 (Opus 4.7)":     {"id": "claude-opus-4-7",             "desc": "최상급 품질",   "input": 5.00,  "output": 25.00},
 }
 
-# 기본값은 Secrets 또는 Sonnet
 _default_model_id = st.secrets.get("claude_model", "claude-sonnet-4-6")
 _default_label = "⭐ 균형형 (Sonnet 4.6)"
 for label, info in MODEL_CHOICES.items():
@@ -447,7 +548,6 @@ for label, info in MODEL_CHOICES.items():
         _default_label = label
         break
 
-# 세션 초기화
 if 'selected_model_label' not in st.session_state:
     st.session_state.selected_model_label = _default_label
 
@@ -467,7 +567,6 @@ with st.sidebar:
     _info = MODEL_CHOICES[selected_label]
     target_model_name = _info["id"]
     
-    # 선택한 모델 정보 카드
     st.markdown(f"""
     <div style="background:rgba(212,175,55,0.08);border:1px solid rgba(212,175,55,0.25);border-radius:8px;padding:8px 10px;margin-top:6px;font-size:11px;">
         <div style="color:#d4af37;font-weight:700;">{_info['desc']}</div>
@@ -476,28 +575,21 @@ with st.sidebar:
     </div>
     """, unsafe_allow_html=True)
 
-
-model_name = target_model_name  # 호환성을 위해 기존 변수명 유지
-
+model_name = target_model_name
 
 # ── Claude 호출 헬퍼 함수 ──
 def build_content_blocks(prompt_text, extra_content=None, extra_content2=None):
-    """프롬프트 + 선택적 이미지/PDF를 Claude messages 형식으로 구성"""
     blocks = []
-    
-    # 첨부 콘텐츠 처리 (이미지 또는 PDF)
     for content in [extra_content, extra_content2]:
         if content is None:
             continue
         if isinstance(content, dict) and content.get("mime_type") == "application/pdf":
-            # PDF는 base64 인코딩
             pdf_b64 = base64.standard_b64encode(content["data"]).decode("utf-8")
             blocks.append({
                 "type": "document",
                 "source": {"type": "base64", "media_type": "application/pdf", "data": pdf_b64}
             })
         elif isinstance(content, Image.Image):
-            # Pillow 이미지 → base64
             buf = io.BytesIO()
             if content.mode != "RGB":
                 content = content.convert("RGB")
@@ -507,66 +599,48 @@ def build_content_blocks(prompt_text, extra_content=None, extra_content2=None):
                 "type": "image",
                 "source": {"type": "base64", "media_type": "image/jpeg", "data": img_b64}
             })
-    
-    # 텍스트 프롬프트는 마지막에
     blocks.append({"type": "text", "text": prompt_text})
     return blocks
 
-
 def claude_generate(prompt_text, extra_content=None, extra_content2=None, max_tokens=4096):
-    """Claude API 호출 → (텍스트, input_tokens, output_tokens) 튜플 반환. 예외는 호출측에서 처리."""
     content_blocks = build_content_blocks(prompt_text, extra_content, extra_content2)
     response = client.messages.create(
         model=target_model_name,
         max_tokens=max_tokens,
         messages=[{"role": "user", "content": content_blocks}]
     )
-    # 응답 텍스트 추출 (여러 블록 있을 수 있음)
     text = "".join(block.text for block in response.content if hasattr(block, "text"))
-    # 토큰 사용량 추출 (usage 객체)
     in_tokens = getattr(response.usage, "input_tokens", 0) or 0
     out_tokens = getattr(response.usage, "output_tokens", 0) or 0
     return text, in_tokens, out_tokens
 
-
-# ── Claude API 가격 정보 (claude-sonnet-4-6 기준, 2026년 4월) ──
-# https://platform.claude.com/docs/en/about-claude/pricing
 CLAUDE_PRICING = {
-    "claude-sonnet-4-6":       {"input": 3.00,  "output": 15.00},  # per 1M tokens
+    "claude-sonnet-4-6":       {"input": 3.00,  "output": 15.00},
     "claude-opus-4-7":         {"input": 5.00,  "output": 25.00},
     "claude-opus-4-6":         {"input": 5.00,  "output": 25.00},
     "claude-haiku-4-5-20251001": {"input": 1.00, "output": 5.00},
 }
 
 def calc_cost_usd(model, in_tok, out_tok):
-    """토큰 수 → USD 비용 계산"""
     p = CLAUDE_PRICING.get(model, CLAUDE_PRICING["claude-sonnet-4-6"])
     return (in_tok / 1_000_000) * p["input"] + (out_tok / 1_000_000) * p["output"]
 
-
 def log_usage(db, user_email, step_name, in_tokens, out_tokens, model):
-    """사용자별 상세 사용 로그 추가. DB에 영구 저장."""
-    # 로그 배열이 없으면 초기화
     if "usage_logs" not in db:
         db["usage_logs"] = []
-    
     cost = calc_cost_usd(model, in_tokens, out_tokens)
-    
     log_entry = {
-        "ts": datetime.now().isoformat(timespec='seconds'),  # ISO 타임스탬프
+        "ts": datetime.now().isoformat(timespec='seconds'),
         "email": user_email,
-        "step": step_name,  # "Step 1", "Step 2", "Step 3"
+        "step": step_name,
         "in_tokens": in_tokens,
         "out_tokens": out_tokens,
         "cost_usd": round(cost, 6),
         "model": model
     }
     db["usage_logs"].append(log_entry)
-    
-    # 로그가 너무 많아지면 오래된 것부터 삭제 (Gist 용량 제한 대응 - 최근 5000개만 유지)
     if len(db["usage_logs"]) > 5000:
         db["usage_logs"] = db["usage_logs"][-5000:]
-    
     return log_entry
 
 # =====================================================================
@@ -594,11 +668,9 @@ if current_user.get("is_admin"):
         if st.button("🔄 새 기업 컨설팅 시작"):
             st.session_state.suggestions = None
             st.session_state.report_sections = None
-            st.session_state.scan_results = []
             st.session_state.picked_tech = None
             st.session_state.step2_topic = ''
             st.session_state.uploader_key = str(int(st.session_state.uploader_key) + 1)
-            # 대시보드 모드도 해제
             st.session_state.admin_dashboard_mode = False
             st.rerun()
     with bcol2:
@@ -607,15 +679,10 @@ if current_user.get("is_admin"):
         if st.button(dash_label, use_container_width=True, type="primary" if not _is_dash else "secondary"):
             st.session_state.admin_dashboard_mode = not _is_dash
             st.rerun()
-    
-    # ── 디버그: 세션 상태 노출 (문제 확인 후 제거 가능) ──
-    with st.expander("🔧 디버그 정보 (관리자 전용)", expanded=False):
-        st.caption(f"admin_dashboard_mode = `{st.session_state.admin_dashboard_mode}` · is_admin = `{current_user.get('is_admin')}` · 로그수 = `{len(user_db.get('usage_logs', []))}`")
 else:
     if st.button("🔄 새 기업 컨설팅 시작"):
         st.session_state.suggestions = None
         st.session_state.report_sections = None
-        st.session_state.scan_results = []
         st.session_state.picked_tech = None
         st.session_state.step2_topic = ''
         st.session_state.uploader_key = str(int(st.session_state.uploader_key) + 1)
@@ -626,14 +693,12 @@ else:
 # =====================================================================
 if current_user.get("is_admin") and st.session_state.admin_dashboard_mode:
     st.markdown('<div class="sec-title"><h3>📈 관리자 대시보드 · 전체 사용량 분석</h3></div>', unsafe_allow_html=True)
-    
     logs = user_db.get("usage_logs", [])
     users_dict = user_db.get("users", {})
     
     if not logs:
-        st.info("📭 아직 누적된 사용 로그가 없습니다. 사용자가 Step 1/2/3 기능을 실행하면 여기에 쌓입니다.")
+        st.info("📭 아직 누적된 사용 로그가 없습니다.")
     else:
-        # ── DataFrame 변환 ──
         df = pd.DataFrame(logs)
         df['ts'] = pd.to_datetime(df['ts'])
         df['date'] = df['ts'].dt.date
@@ -641,18 +706,15 @@ if current_user.get("is_admin") and st.session_state.admin_dashboard_mode:
         df['weekday'] = df['ts'].dt.day_name()
         df['total_tokens'] = df['in_tokens'] + df['out_tokens']
         
-        # ── 상단 KPI 카드 4개 ──
         total_calls = len(df)
         total_cost = df['cost_usd'].sum()
         total_tokens = df['total_tokens'].sum()
         unique_users = df['email'].nunique()
         
-        # 이번 달 필터
         current_month_mask = (df['ts'].dt.month == date.today().month) & (df['ts'].dt.year == date.today().year)
         month_cost = df[current_month_mask]['cost_usd'].sum()
         month_calls = current_month_mask.sum()
         
-        # 오늘 필터
         today_mask = df['date'] == date.today()
         today_cost = df[today_mask]['cost_usd'].sum()
         today_calls = today_mask.sum()
@@ -683,20 +745,18 @@ if current_user.get("is_admin") and st.session_state.admin_dashboard_mode:
         """
         st.markdown(kpi_html, unsafe_allow_html=True)
         
-        # ── 필터 ──
         fcol1, fcol2, fcol3 = st.columns([2, 2, 1])
         with fcol1:
             period = st.selectbox("📅 기간", ["전체 기간", "오늘", "최근 7일", "최근 30일", "이번 달"], index=0)
         with fcol2:
             user_filter = st.selectbox("👤 사용자 필터", ["전체"] + sorted(df['email'].unique().tolist()))
         with fcol3:
-            st.write("")  # 맞춤
+            st.write("")
             refresh = st.button("🔄 새로고침", use_container_width=True)
             if refresh:
                 st.session_state["user_db_cache"] = load_db()
                 st.rerun()
         
-        # ── 필터 적용 ──
         filtered = df.copy()
         if period == "오늘":
             filtered = filtered[filtered['date'] == date.today()]
@@ -717,56 +777,37 @@ if current_user.get("is_admin") and st.session_state.admin_dashboard_mode:
         else:
             st.caption(f"📊 필터 결과: **{len(filtered)}건**, 총 **${filtered['cost_usd'].sum():.4f}** (₩{int(filtered['cost_usd'].sum()*1400):,})")
             
-            # ── 1. 사용자별 랭킹 테이블 ──
             st.markdown('<div style="font-size:14px;font-weight:700;color:#0b1f52;margin:18px 0 8px;">🏆 사용자별 사용량 순위 (비용 기준)</div>', unsafe_allow_html=True)
-            
             user_agg = filtered.groupby('email').agg(
-                호출수=('ts', 'count'),
-                입력토큰=('in_tokens', 'sum'),
-                출력토큰=('out_tokens', 'sum'),
-                총토큰=('total_tokens', 'sum'),
-                비용USD=('cost_usd', 'sum'),
-                마지막사용=('ts', 'max')
+                호출수=('ts', 'count'), 입력토큰=('in_tokens', 'sum'), 출력토큰=('out_tokens', 'sum'), 총토큰=('total_tokens', 'sum'), 비용USD=('cost_usd', 'sum'), 마지막사용=('ts', 'max')
             ).reset_index().sort_values('비용USD', ascending=False)
             
             user_agg['비용원'] = (user_agg['비용USD'] * 1400).astype(int)
             user_agg['마지막사용'] = user_agg['마지막사용'].dt.strftime('%Y-%m-%d %H:%M')
             user_agg.columns = ['이메일', '호출수', '입력토큰', '출력토큰', '총토큰', '비용($)', '마지막사용', '비용(₩)']
-            
-            # 순위 추가
             user_agg.insert(0, '순위', range(1, len(user_agg) + 1))
-            # 표시 순서: 순위, 이메일, 호출수, 총토큰, 비용($), 비용(₩), 마지막사용
             display_agg = user_agg[['순위', '이메일', '호출수', '입력토큰', '출력토큰', '총토큰', '비용($)', '비용(₩)', '마지막사용']].copy()
             display_agg['비용($)'] = display_agg['비용($)'].apply(lambda x: f"${x:.4f}")
             display_agg['비용(₩)'] = display_agg['비용(₩)'].apply(lambda x: f"₩{x:,}")
             display_agg['입력토큰'] = display_agg['입력토큰'].apply(lambda x: f"{x:,}")
             display_agg['출력토큰'] = display_agg['출력토큰'].apply(lambda x: f"{x:,}")
             display_agg['총토큰'] = display_agg['총토큰'].apply(lambda x: f"{x:,}")
-            
             st.dataframe(display_agg, use_container_width=True, hide_index=True)
             
-            # ── 2. 기능별(Step별) 사용 분포 ──
             c1, c2 = st.columns(2)
             with c1:
                 st.markdown('<div style="font-size:14px;font-weight:700;color:#0b1f52;margin:8px 0;">📊 기능별 호출 횟수</div>', unsafe_allow_html=True)
                 step_counts = filtered.groupby('step').size().reset_index(name='호출수').sort_values('호출수', ascending=False)
                 st.bar_chart(step_counts.set_index('step'))
-            
             with c2:
                 st.markdown('<div style="font-size:14px;font-weight:700;color:#0b1f52;margin:8px 0;">💰 기능별 비용 분포</div>', unsafe_allow_html=True)
                 step_cost = filtered.groupby('step')['cost_usd'].sum().reset_index()
                 step_cost.columns = ['step', '비용(USD)']
                 st.bar_chart(step_cost.set_index('step'))
             
-            # ── 모델별 사용 분포 (여러 모델 사용 시에만) ──
             if 'model' in filtered.columns and filtered['model'].nunique() > 1:
                 st.markdown('<div style="font-size:14px;font-weight:700;color:#0b1f52;margin:18px 0 8px;">🤖 모델별 사용 비율</div>', unsafe_allow_html=True)
-                _model_short = {
-                    "claude-opus-4-7": "👑 Opus 4.7",
-                    "claude-opus-4-6": "👑 Opus 4.6",
-                    "claude-sonnet-4-6": "⭐ Sonnet 4.6",
-                    "claude-haiku-4-5-20251001": "⚡ Haiku 4.5",
-                }
+                _model_short = {"claude-opus-4-7": "👑 Opus 4.7", "claude-opus-4-6": "👑 Opus 4.6", "claude-sonnet-4-6": "⭐ Sonnet 4.6", "claude-haiku-4-5-20251001": "⚡ Haiku 4.5"}
                 mc1, mc2 = st.columns(2)
                 with mc1:
                     st.caption("📞 모델별 호출 횟수")
@@ -779,12 +820,10 @@ if current_user.get("is_admin") and st.session_state.admin_dashboard_mode:
                     model_cost_df['모델'] = model_cost_df['model'].apply(lambda x: _model_short.get(x, x))
                     st.bar_chart(model_cost_df.groupby('모델')['cost_usd'].sum())
             
-            # ── 3. 일별 추이 ──
             st.markdown('<div style="font-size:14px;font-weight:700;color:#0b1f52;margin:18px 0 8px;">📈 일별 사용 추이</div>', unsafe_allow_html=True)
             daily = filtered.groupby('date').agg(호출수=('ts', 'count'), 비용USD=('cost_usd', 'sum')).reset_index()
             daily['date'] = pd.to_datetime(daily['date'])
             daily = daily.set_index('date')
-            
             dc1, dc2 = st.columns(2)
             with dc1:
                 st.caption("📞 일별 호출 횟수")
@@ -793,70 +832,39 @@ if current_user.get("is_admin") and st.session_state.admin_dashboard_mode:
                 st.caption("💵 일별 비용 (USD)")
                 st.line_chart(daily[['비용USD']])
             
-            # ── 4. 시간대별 히트맵 (요일 × 시간) ──
             st.markdown('<div style="font-size:14px;font-weight:700;color:#0b1f52;margin:18px 0 8px;">🕐 시간대별 사용 패턴 (요일 × 시)</div>', unsafe_allow_html=True)
-            
-            # 요일을 한글로 매핑하고 순서 고정
             weekday_map = {'Monday': '월', 'Tuesday': '화', 'Wednesday': '수', 'Thursday': '목', 'Friday': '금', 'Saturday': '토', 'Sunday': '일'}
             filtered_copy = filtered.copy()
             filtered_copy['요일'] = filtered_copy['weekday'].map(weekday_map)
-            
             heatmap = filtered_copy.groupby(['요일', 'hour']).size().unstack(fill_value=0)
-            # 요일 순서 고정
             weekday_order = ['월', '화', '수', '목', '금', '토', '일']
             heatmap = heatmap.reindex([w for w in weekday_order if w in heatmap.index])
-            # 시간대 0~23 전부 채우기
             for h in range(24):
                 if h not in heatmap.columns:
                     heatmap[h] = 0
             heatmap = heatmap[sorted(heatmap.columns)]
-            
             if not heatmap.empty:
-                st.dataframe(
-                    heatmap.style.background_gradient(cmap='YlOrRd', axis=None).format("{:.0f}"),
-                    use_container_width=True
-                )
+                st.dataframe(heatmap.style.background_gradient(cmap='YlOrRd', axis=None).format("{:.0f}"), use_container_width=True)
                 st.caption("💡 색이 진할수록 해당 시간대에 많이 사용됨 (숫자 = 호출 횟수)")
             
-            # ── 5. 상세 로그 ──
             with st.expander(f"🔍 상세 로그 보기 (총 {len(filtered)}건)", expanded=False):
                 detail = filtered.sort_values('ts', ascending=False).copy()
                 detail['시각'] = detail['ts'].dt.strftime('%Y-%m-%d %H:%M:%S')
                 detail['비용($)'] = detail['cost_usd'].apply(lambda x: f"${x:.5f}")
-                # 모델명을 읽기 쉽게 축약
-                _model_short = {
-                    "claude-opus-4-7": "👑 Opus 4.7",
-                    "claude-opus-4-6": "👑 Opus 4.6",
-                    "claude-sonnet-4-6": "⭐ Sonnet 4.6",
-                    "claude-haiku-4-5-20251001": "⚡ Haiku 4.5",
-                }
+                _model_short = {"claude-opus-4-7": "👑 Opus 4.7", "claude-opus-4-6": "👑 Opus 4.6", "claude-sonnet-4-6": "⭐ Sonnet 4.6", "claude-haiku-4-5-20251001": "⚡ Haiku 4.5"}
                 detail['모델'] = detail['model'].apply(lambda x: _model_short.get(x, x))
                 detail_display = detail[['시각', 'email', 'step', '모델', 'in_tokens', 'out_tokens', '비용($)']].copy()
                 detail_display.columns = ['시각', '이메일', '기능', '모델', '입력토큰', '출력토큰', '비용($)']
                 st.dataframe(detail_display, use_container_width=True, hide_index=True)
             
-            # ── 6. CSV 다운로드 ──
             dl_col1, dl_col2 = st.columns(2)
             with dl_col1:
                 csv_summary = user_agg.to_csv(index=False, encoding='utf-8-sig')
-                st.download_button(
-                    "📥 사용자별 요약 CSV",
-                    csv_summary,
-                    file_name=f"사용량요약_{date.today()}.csv",
-                    mime="text/csv",
-                    use_container_width=True
-                )
+                st.download_button("📥 사용자별 요약 CSV", csv_summary, file_name=f"사용량요약_{date.today()}.csv", mime="text/csv", use_container_width=True)
             with dl_col2:
                 csv_detail = filtered[['ts', 'email', 'step', 'in_tokens', 'out_tokens', 'cost_usd', 'model']].to_csv(index=False, encoding='utf-8-sig')
-                st.download_button(
-                    "📥 상세 로그 CSV",
-                    csv_detail,
-                    file_name=f"상세로그_{date.today()}.csv",
-                    mime="text/csv",
-                    use_container_width=True
-                )
+                st.download_button("📥 상세 로그 CSV", csv_detail, file_name=f"상세로그_{date.today()}.csv", mime="text/csv", use_container_width=True)
             
-            # ── 7. 로그 관리 (위험) ──
             with st.expander("⚠️ 로그 관리 (위험 구역)"):
                 st.caption(f"현재 DB에 저장된 총 로그: **{len(logs)}건**")
                 if st.button("🗑️ 모든 로그 삭제 (복구 불가)", key="del_logs"):
@@ -870,7 +878,6 @@ if current_user.get("is_admin") and st.session_state.admin_dashboard_mode:
                         st.session_state['confirm_del_logs'] = True
                         st.warning("⚠️ 정말 삭제하시겠습니까? 한 번 더 버튼을 누르면 삭제됩니다.")
     
-    # 대시보드 모드에서는 아래 Step 1/2/3을 숨김
     st.stop()
 
 # =====================================================================
@@ -887,7 +894,6 @@ with col1:
     if uploaded_file:
         fb = uploaded_file.getvalue()
         analysis_content = {"mime_type": "application/pdf", "data": fb} if uploaded_file.type == "application/pdf" else Image.open(uploaded_file)
-        # Step 3에서 사용하기 위해 세션에 저장 (PDF는 바이트, 이미지는 Pillow 객체)
         if uploaded_file.type == "application/pdf":
             st.session_state['step1_analysis_type'] = 'pdf'
             st.session_state['step1_analysis_data'] = fb
@@ -900,7 +906,6 @@ with col1:
     user_guide_rec = st.text_area("추천 가이드 (선택)", placeholder="예: ESG 강조, 수출 중심", key=f"gr_{st.session_state.uploader_key}", height=80)
 
     if st.button("✨ AI 기술 주제 추천", type="primary", use_container_width=True):
-        # 🔥 버튼 클릭 즉시 피드백 표시 (디버깅용)
         st.info(f"🔄 버튼 감지됨 · 모델: `{target_model_name}` · 업종: {biz_type}")
         
         if current_user.get("usage_count", 0) >= MAX_MONTHLY_LIMIT:
@@ -931,23 +936,20 @@ with col1:
   ]
 }}
 """
-                
                 max_retries = 2
                 last_error = None
                 for attempt in range(max_retries):
                     try:
                         result_text, in_tok, out_tok = claude_generate(prompt, analysis_content, max_tokens=2048)
-                        
-                        # JSON 파싱 시도 (마크다운 코드펜스 제거)
                         clean_text = result_text.replace('```json', '').replace('```', '').strip()
                         try:
                             parsed = json.loads(clean_text)
                             if 'suggestions' in parsed and isinstance(parsed['suggestions'], list):
-                                st.session_state.suggestions = parsed  # dict 저장
+                                st.session_state.suggestions = parsed
                             else:
-                                st.session_state.suggestions = result_text  # 파싱 실패 시 원문
+                                st.session_state.suggestions = result_text
                         except json.JSONDecodeError:
-                            st.session_state.suggestions = result_text  # 원문 저장
+                            st.session_state.suggestions = result_text
                         
                         st.session_state.daily_api_count += 1
                         user_db["users"][current_user_email]["usage_count"] += 1
@@ -985,20 +987,14 @@ with col1:
                 if last_error is None and st.session_state.suggestions:
                     st.success("✅ 생성 완료!")
 
-    # ── AI 추천 결과 표시 (JSON 파싱된 경우 카드 + 버튼, 아니면 원문) ──
     if st.session_state.suggestions is not None:
         suggestions = st.session_state.suggestions
-        
-        # dict 형식 (파싱 성공) → 예쁜 카드 + 선택 버튼
         if isinstance(suggestions, dict) and 'suggestions' in suggestions:
             st.markdown('<div style="font-size:13px;font-weight:700;color:#92700c;margin:12px 0 6px;">💡 AI 추천 기술 주제 · 마음에 드는 걸 선택하세요</div>', unsafe_allow_html=True)
-            
             for idx, sug in enumerate(suggestions['suggestions'], 1):
                 tech_name = sug.get('tech_name', '이름 없음')
                 reason = sug.get('reason', '')
                 fitness = sug.get('fitness', '')
-                
-                # 카드 스타일
                 st.markdown(f'''
                 <div style="background:linear-gradient(135deg,#fffdf5,#fefce8);border:1px solid #e5d9a8;border-left:4px solid #d4af37;border-radius:10px;padding:12px 16px;margin:10px 0 0;">
                     <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
@@ -1010,13 +1006,11 @@ with col1:
                 </div>
                 ''', unsafe_allow_html=True)
                 
-                # 선택 버튼
                 if st.button(f"→ 이 기술로 진행", key=f"pick_tech_{idx}", use_container_width=True):
                     st.session_state['picked_tech'] = tech_name
                     st.session_state['step2_topic'] = tech_name
                     st.rerun()
         else:
-            # 파싱 실패 시 원문 그대로 표시
             raw_text = str(suggestions) if not isinstance(suggestions, str) else suggestions
             st.markdown(f'<div class="ai-result"><b>💡 AI 추천 기술 주제</b><br><br>{raw_text.replace(chr(10), "<br>")}</div>', unsafe_allow_html=True)
             st.caption("💡 위 추천 중 마음에 드는 기술명을 복사해서 오른쪽 Step 2 '확정 기술명'에 붙여넣거나, 원하는 기술명을 직접 입력하세요.")
@@ -1024,7 +1018,6 @@ with col1:
 with col2:
     st.markdown('<div class="sec-title"><h3>📑 Step 2 · 마스터 리포트 생성</h3></div>', unsafe_allow_html=True)
     
-    # AI 추천에서 선택된 기술이 있으면 입력창에 미리 채움 (직접 수정 가능)
     _prefill = st.session_state.get('picked_tech', '') or st.session_state.get('step2_topic', '')
     selected_topic = st.text_input(
         "확정 기술명",
@@ -1033,10 +1026,8 @@ with col2:
         key=f"topic_{st.session_state.uploader_key}",
         help="AI 추천 중 선택 버튼을 누르면 자동으로 채워집니다. 직접 타이핑/수정도 가능해요."
     )
-    # 사용자가 입력창을 수정하면 그 값을 세션에 반영
     if selected_topic:
         st.session_state['step2_topic'] = selected_topic
-        # picked_tech는 값이 바뀌었다면 해제 (그래야 다음 수정이 자유롭게 됨)
         if st.session_state.get('picked_tech') and selected_topic != st.session_state.get('picked_tech'):
             st.session_state['picked_tech'] = None
     user_guide_rep = st.text_area("리포트 지시사항 (선택)", placeholder="예: 시장규모 숫자 강조", key=f"gp_{st.session_state.uploader_key}", height=80)
@@ -1083,7 +1074,6 @@ V 당사 성과가 가능한 이유는 [핵심 역량]이 있기 때문이며 �
                 max_retries = 2
                 for attempt in range(max_retries):
                     try:
-                        # 마스터 리포트는 긴 출력 필요 → max_tokens 8192
                         result_text, in_tok, out_tok = claude_generate(form_prompt, analysis_content, max_tokens=8192)
                         st.session_state.report_sections = result_text.split('### ')
                         st.session_state.daily_api_count += 1
@@ -1109,428 +1099,27 @@ V 당사 성과가 가능한 이유는 [핵심 역량]이 있기 때문이며 �
                         break
 
 # =====================================================================
-# 📄 리포트 출력
+# 📄 HTML 리포트 출력 및 다운로드 (Step 3 대체)
 # =====================================================================
 if st.session_state.report_sections is not None:
     st.divider()
-    st.markdown('<div class="sec-title"><h3>📄 마스터 리포트 결과</h3></div>', unsafe_allow_html=True)
-    full_report = "\n\n".join(st.session_state.report_sections)
-    st.download_button("💾 전체 리포트 다운로드", full_report, file_name=f"벤처리포트_{selected_topic or 'report'}.txt")
-
-    for section in st.session_state.report_sections:
-        if not section.strip():
-            continue
-        lines = section.split('\n', 1)
-        title = lines[0].strip('[] #')
-        body = lines[1] if len(lines) > 1 else ""
-        if not title.strip():
-            continue
-        with st.expander(f"📌 {title}", expanded=False):
-            if "신청기술 요약" in title or "표준 양식" in title:
-                parts = []
-                for line in body.split('\n'):
-                    s = line.strip()
-                    if s.startswith('V ') or s.startswith('V\u3000'):
-                        parts.append(f'<div class="v-item"><span class="v-badge">V</span><span>{s[2:]}</span></div>')
-                    elif s.startswith('- 신청기술') or s.startswith('-신청기술'):
-                        parts.append(f'<div style="font-weight:600;color:#0b1f52;margin:6px 0;">{s}</div>')
-                    elif s:
-                        parts.append(f'{s}<br>')
-                st.markdown(f'<div class="rpt-body">{"".join(parts)}</div>', unsafe_allow_html=True)
-            else:
-                st.markdown(f'<div class="rpt-body">{body.replace(chr(10), "<br>")}</div>', unsafe_allow_html=True)
-
-# =====================================================================
-# 🎯 Step 3: 화면공유 + 캡처 버튼 방식 (안정 버전)
-# =====================================================================
-st.divider()
-st.markdown('<div class="sec-title"><h3>🎯 Step 3 · 화면 캡처 AI 자동 작성</h3></div>', unsafe_allow_html=True)
-
-st.info("""
-**[사용법 — 화면 공유 + 캡처 버튼 방식]**
-1. **'🔴 화면 공유 시작'** 버튼 → 벤처인증 사이트 창/탭 선택 → 공유 시작
-2. 벤처인증 사이트에서 **작성할 입력란이 보이는 화면**까지 스크롤 이동
-3. **'📸 이 화면 분석'** 버튼 클릭 → 현재 공유중인 화면을 캡처해 AI에게 전송
-4. 아래에 생성된 문구 복사해서 벤처인증 사이트에 붙여넣기
-5. 다른 입력란으로 이동 → 다시 **'📸 이 화면 분석'** 클릭 (화면 공유는 유지됨)
-6. 작업 끝나면 **'⏹ 중지'** 클릭
-
-💡 **장점:** 드래그 없이 버튼 한 번이면 현재 화면의 모든 입력란을 AI가 분석합니다.
-""")
-
-# ── 화면공유 + 캡처 컴포넌트 ──
-scan_component_html = """
-<div id="scan-root" style="font-family: 'Noto Sans KR', sans-serif;">
-    <div style="display: flex; gap: 10px; align-items: center; margin-bottom: 12px; flex-wrap: wrap;">
-        <button id="startBtn" style="
-            padding: 12px 20px;
-            background: linear-gradient(135deg, #d4af37 0%, #b8952e 100%);
-            color: #0b1f52;
-            font-weight: 700;
-            font-size: 14px;
-            border: none;
-            border-radius: 10px;
-            cursor: pointer;
-            box-shadow: 0px 4px 10px rgba(212,175,55,0.3);
-        ">🔴 화면 공유 시작</button>
-        
-        <button id="captureBtn" disabled style="
-            padding: 12px 20px;
-            background: #e5e7eb;
-            color: #6b7280;
-            font-weight: 700;
-            font-size: 14px;
-            border: none;
-            border-radius: 10px;
-            cursor: not-allowed;
-        ">📸 이 화면 분석</button>
-        
-        <button id="stopBtn" disabled style="
-            padding: 12px 20px;
-            background: #e5e7eb;
-            color: #6b7280;
-            font-weight: 700;
-            font-size: 14px;
-            border: none;
-            border-radius: 10px;
-            cursor: not-allowed;
-        ">⏹ 중지</button>
-        
-        <div id="status" style="
-            font-size: 13px;
-            color: #6b7280;
-            padding: 8px 14px;
-            background: #f3f4f6;
-            border-radius: 8px;
-            font-weight: 500;
-            flex: 1;
-            min-width: 200px;
-        ">⚪ 대기 중 — 화면 공유를 시작하세요</div>
-    </div>
+    st.markdown('<div class="sec-title"><h3>📄 마스터 리포트 완성 (HTML 다운로드)</h3></div>', unsafe_allow_html=True)
+    st.success("✅ **AI 리포트 생성이 완료되었습니다.** 아래 버튼을 눌러 디자인이 적용된 HTML 리포트 원본을 다운로드하세요.")
     
-    <div id="preview-box" style="display: none; margin-top: 10px;">
-        <video id="video" autoplay playsinline style="
-            width: 100%;
-            max-height: 400px;
-            border-radius: 10px;
-            border: 2px solid #d4af37;
-            background: #000;
-            object-fit: contain;
-        "></video>
-        <div style="font-size: 11px; color: #9ca3af; margin-top: 6px;">
-            👆 <b style="color:#d4af37;">공유 중인 화면</b> — 원하는 입력란 보이게 스크롤 후 <b>[📸 이 화면 분석]</b> 클릭
-        </div>
-    </div>
+    # 세션에서 생성된 섹션 데이터를 HTML로 변환
+    html_content = generate_html_report(selected_topic, st.session_state.report_sections)
     
-    <canvas id="hidden-canvas" style="display:none;"></canvas>
-</div>
-
-<script>
-(function() {
-    const startBtn = document.getElementById('startBtn');
-    const captureBtn = document.getElementById('captureBtn');
-    const stopBtn = document.getElementById('stopBtn');
-    const status = document.getElementById('status');
-    const previewBox = document.getElementById('preview-box');
-    const video = document.getElementById('video');
-    const canvas = document.getElementById('hidden-canvas');
+    col_dl, col_space = st.columns([1, 2])
+    with col_dl:
+        st.download_button(
+            label="💾 디자인 리포트 다운로드 (.html)",
+            data=html_content,
+            file_name=f"벤처인증_마스터리포트_{selected_topic or '결과'}.html",
+            mime="text/html",
+            type="primary",
+            use_container_width=True
+        )
     
-    let stream = null;
-    let captureCount = 0;
-    
-    function setStatus(text, type) {
-        status.innerHTML = text;
-        const colors = {
-            ready: ['#f3f4f6', '#6b7280'],
-            live:  ['#d1fae5', '#065f46'],
-            sending: ['#fef9c3', '#854d0e'],
-            err:   ['#fee2e2', '#991b1b']
-        };
-        const [bg, col] = colors[type] || colors.ready;
-        status.style.background = bg;
-        status.style.color = col;
-    }
-    
-    function setCaptureEnabled(enabled) {
-        captureBtn.disabled = !enabled;
-        if (enabled) {
-            captureBtn.style.background = 'linear-gradient(135deg, #d4af37 0%, #b8952e 100%)';
-            captureBtn.style.color = '#0b1f52';
-            captureBtn.style.cursor = 'pointer';
-            captureBtn.style.boxShadow = '0px 4px 10px rgba(212,175,55,0.3)';
-        } else {
-            captureBtn.style.background = '#e5e7eb';
-            captureBtn.style.color = '#6b7280';
-            captureBtn.style.cursor = 'not-allowed';
-            captureBtn.style.boxShadow = 'none';
-        }
-    }
-    
-    startBtn.onclick = async () => {
-        try {
-            stream = await navigator.mediaDevices.getDisplayMedia({
-                video: { frameRate: 15 },
-                audio: false
-            });
-            video.srcObject = stream;
-            previewBox.style.display = 'block';
-            
-            startBtn.disabled = true;
-            startBtn.style.background = '#9ca3af';
-            startBtn.style.cursor = 'not-allowed';
-            startBtn.style.boxShadow = 'none';
-            
-            stopBtn.disabled = false;
-            stopBtn.style.background = '#dc2626';
-            stopBtn.style.color = 'white';
-            stopBtn.style.cursor = 'pointer';
-            
-            // 비디오 로드 대기
-            await new Promise(resolve => {
-                if (video.videoWidth) return resolve();
-                video.onloadedmetadata = resolve;
-            });
-            
-            setCaptureEnabled(true);
-            setStatus('🟢 공유 중 — 원하는 화면으로 스크롤 후 [📸 이 화면 분석] 클릭', 'live');
-            
-            // 사용자가 브라우저에서 직접 공유 중지 시
-            stream.getVideoTracks()[0].onended = () => { stopScan(); };
-            
-        } catch (err) {
-            setStatus('❌ 화면 공유 권한 거부 또는 취소됨', 'err');
-            console.error(err);
-        }
-    };
-    
-    captureBtn.onclick = () => {
-        if (!stream || !video.videoWidth) {
-            setStatus('⚠️ 화면 공유를 먼저 시작하세요', 'err');
-            return;
-        }
-        
-        // 현재 프레임 캡처
-        canvas.width = video.videoWidth;
-        canvas.height = video.videoHeight;
-        const ctx = canvas.getContext('2d');
-        ctx.drawImage(video, 0, 0);
-        
-        const imageData = canvas.toDataURL('image/jpeg', 0.85);
-        captureCount++;
-        
-        setStatus(`🟡 캡처 #${captureCount} AI에게 전송 중... (잠시만 기다리세요)`, 'sending');
-        
-        // 캡처 직후엔 잠시 버튼 비활성화 (중복 클릭 방지)
-        setCaptureEnabled(false);
-        setTimeout(() => {
-            if (stream) setCaptureEnabled(true);
-        }, 5000);
-        
-        // Streamlit으로 전송 (timestamp로 중복 방지, count로 식별)
-        window.parent.postMessage({
-            type: 'streamlit:setComponentValue',
-            value: { 
-                image: imageData, 
-                timestamp: Date.now(), 
-                count: captureCount,
-                width: video.videoWidth,
-                height: video.videoHeight
-            }
-        }, '*');
-    };
-    
-    function stopScan() {
-        if (stream) stream.getTracks().forEach(t => t.stop());
-        stream = null;
-        previewBox.style.display = 'none';
-        
-        startBtn.disabled = false;
-        startBtn.style.background = 'linear-gradient(135deg, #d4af37 0%, #b8952e 100%)';
-        startBtn.style.cursor = 'pointer';
-        startBtn.style.boxShadow = '0px 4px 10px rgba(212,175,55,0.3)';
-        
-        setCaptureEnabled(false);
-        
-        stopBtn.disabled = true;
-        stopBtn.style.background = '#e5e7eb';
-        stopBtn.style.color = '#6b7280';
-        stopBtn.style.cursor = 'not-allowed';
-        
-        setStatus(`⚪ 중지됨 (총 ${captureCount}회 캡처)`, 'ready');
-    }
-    
-    stopBtn.onclick = stopScan;
-})();
-</script>
-"""
-
-# 컴포넌트 실행 (높이 넉넉히 — 미리보기 영역 고려)
-captured_frame = components.html(scan_component_html, height=550)
-
-
-# =====================================================================
-# 🧠 캡처된 크롭 영역 분석 로직
-# =====================================================================
-frame_data = None
-if captured_frame:
-    if isinstance(captured_frame, dict) and 'image' in captured_frame:
-        frame_data = captured_frame
-    elif isinstance(captured_frame, str) and captured_frame.startswith('data:image'):
-        frame_data = {'image': captured_frame, 'timestamp': 0, 'count': 0}
-
-# 마지막 처리한 timestamp 추적 (중복 처리 방지)
-if 'last_processed_ts' not in st.session_state:
-    st.session_state.last_processed_ts = 0
-
-if frame_data and frame_data.get('timestamp', 0) > st.session_state.last_processed_ts:
-    st.session_state.last_processed_ts = frame_data['timestamp']
-    
-    # API 한도 체크
-    if current_user.get("usage_count", 0) >= MAX_MONTHLY_LIMIT:
-        st.error("월간 한도 초과")
-    elif st.session_state.daily_api_count >= DAILY_API_LIMIT:
-        st.error("🚫 오늘 API 한도 초과")
-    else:
-        try:
-            header, encoded = frame_data['image'].split(",", 1)
-            image_bytes = base64.b64decode(encoded)
-            crop_img = Image.open(io.BytesIO(image_bytes))
-            
-            # 기업 컨텍스트 구성
-            company_topic = st.session_state.get('step2_topic', '').strip()
-            context_str = f"확정 기술명: {company_topic}" if company_topic else "(기술명 미입력 — 화면에서 유추)"
-            
-            # 크롭 영역 전용 프롬프트 (전체 페이지 아님)
-            scan_prompt = f"""당신은 20년 경력의 중소기업 벤처인증 전문 컨설턴트입니다.
-
-[기업 컨텍스트]
-{context_str}
-
-[작업]
-제공된 이미지는 사용자가 벤처인증/R&D/정책자금 신청 포털 화면을 **현재 보고 있는 화면 전체**를 캡처한 것입니다.
-이미지 안에는 보통 **여러 개의 입력란(textarea, 질문 항목)**과 각각의 라벨(제목/질문)이 있습니다.
-
-1. 이미지에서 **모든 주요 입력란의 라벨(제목, 질문 문구)**을 찾아내세요.
-2. 각 입력란에 들어갈 **전문적인 벤처인증 문구**를 작성하세요.
-3. 현재 페이지의 전체 주제를 detected_page에 간단히 요약하세요.
-
-[출력 규칙]
-- 반드시 아래 JSON 형식으로만 출력 (마크다운 코드펜스 금지, 설명 금지)
-- 입력란 **최대 8개**까지 (가장 중요한 것들 우선)
-- 각 content는 **200~400자** 분량의 전문 서술형
-- 지어낸 숫자/수치 금지, 일반적 업계 표현 사용
-- 인사말/안내멘트 금지, 즉시 붙여넣기 가능한 본문만
-- 입력란이 불명확하거나 텍스트 입력이 아닌 것(체크박스, 버튼 등)은 제외
-
-[JSON 스키마]
-{{
-  "detected_page": "화면의 전체 주제 (예: 기술혁신성 평가 페이지)",
-  "fields": [
-    {{"label": "입력란 제목1", "content": "작성 문구1"}},
-    {{"label": "입력란 제목2", "content": "작성 문구2"}}
-  ]
-}}
-"""
-            
-            # Step 1 분석자료 (사업자등록증)가 있으면 함께 전달 (컨텍스트 강화)
-            analysis_extra = None
-            if st.session_state.get('step1_analysis_type') == 'pdf':
-                analysis_extra = {"mime_type": "application/pdf", "data": st.session_state['step1_analysis_data']}
-            elif st.session_state.get('step1_analysis_type') == 'image':
-                analysis_extra = Image.open(io.BytesIO(st.session_state['step1_analysis_data']))
-            
-            with st.spinner(f"🤖 영역 분석 중... (#{frame_data.get('count', '?')})"):
-                raw_text = None
-                in_tok = 0
-                out_tok = 0
-                try:
-                    raw_text, in_tok, out_tok = claude_generate(scan_prompt, analysis_extra, crop_img, max_tokens=4096)
-                except anthropic.RateLimitError:
-                    st.warning("⏳ Claude API Rate Limit. 잠시 후 다시 분석 버튼을 누르세요.")
-                except anthropic.APIStatusError as e:
-                    if e.status_code == 429:
-                        st.session_state.daily_api_count = DAILY_API_LIMIT
-                        st.error("🚫 크레딧 부족 또는 한도 초과.")
-                    else:
-                        st.error(f"⚠️ API 오류 ({e.status_code}): {e.message}")
-                
-                if raw_text:
-                    # JSON 파싱 (마크다운 코드펜스 제거)
-                    clean_text = raw_text.replace('```json', '').replace('```', '').strip()
-                    try:
-                        parsed = json.loads(clean_text)
-                        result_entry = {
-                            'timestamp': frame_data['timestamp'],
-                            'scan_num': frame_data.get('count', 0),
-                            'detected_page': parsed.get('detected_page', '알 수 없음'),
-                            'fields': parsed.get('fields', []),
-                            'time_str': datetime.now().strftime('%H:%M:%S'),
-                            'crop_bytes': image_bytes  # 선택 영역 미리보기용
-                        }
-                        st.session_state.scan_results.insert(0, result_entry)
-                        st.session_state.scan_results = st.session_state.scan_results[:5]
-                        
-                        st.session_state.daily_api_count += 1
-                        user_db["users"][current_user_email]["usage_count"] += 1
-                        log_usage(user_db, current_user_email, "Step 3 (영역 스캔)", in_tok, out_tok, target_model_name)
-                        save_db(user_db)
-                    except json.JSONDecodeError:
-                        st.warning(f"⚠️ AI 응답을 JSON으로 파싱하지 못했습니다. 원문: {raw_text[:300]}...")
-        except Exception as e:
-            st.error(f"⚠️ 분석 오류: {e}")
-
-# =====================================================================
-# 📋 영역 분석 결과 (카드 + 선택 영역 미리보기)
-# =====================================================================
-if st.session_state.scan_results:
-    st.divider()
-    
-    latest = st.session_state.scan_results[0]
-    
-    # ── 헤더 정보 ──
-    st.markdown(f'''
-    <div style="background: linear-gradient(135deg, #0b1f52, #1a3a7a); border-radius: 12px; padding: 18px 22px; margin-bottom: 16px; border-left: 5px solid #d4af37;">
-        <div style="color: #d4af37; font-size: 11px; font-weight: 700; letter-spacing: 2px; margin-bottom: 6px;">LATEST ANALYSIS · {latest["time_str"]}</div>
-        <div style="color: white; font-size: 18px; font-weight: 700;">📄 감지된 입력란: {latest["detected_page"]}</div>
-        <div style="color: rgba(255,255,255,0.6); font-size: 12px; margin-top: 4px;">{len(latest["fields"])}개 문구 생성 완료</div>
-    </div>
-    ''', unsafe_allow_html=True)
-    
-    # ── 선택한 영역 미리보기 (접기 가능) ──
-    if latest.get('crop_bytes'):
-        with st.expander("🖼️ 이번에 분석한 영역 보기", expanded=False):
-            st.image(latest['crop_bytes'], caption=f"선택한 입력란 영역 (#{latest['scan_num']})", use_column_width=True)
-    
-    if not latest['fields']:
-        st.warning("⚠️ 이 영역에서는 벤처인증 입력란을 감지하지 못했습니다. 입력란과 라벨이 함께 보이도록 더 크게 드래그해보세요.")
-    else:
-        # ── 표 형태 요약 ──
-        with st.expander("📊 표 형태로 한눈에 보기", expanded=False):
-            tbl_rows = [{'입력란': f['label'], '작성 문구 미리보기': (f['content'][:80] + '...') if len(f['content']) > 80 else f['content']} for f in latest['fields']]
-            st.dataframe(pd.DataFrame(tbl_rows), use_container_width=True, hide_index=True)
-        
-        # ── 카드 형태 (각 입력란별 복사 버튼) ──
-        st.markdown('<div style="font-size: 14px; font-weight: 700; color: #0b1f52; margin: 12px 0 8px;">📝 생성된 문구 (우측 상단 [복사] 아이콘 클릭)</div>', unsafe_allow_html=True)
-        
-        for idx, field in enumerate(latest['fields']):
-            st.markdown(f'''
-            <div style="background: white; border: 1px solid #e5e7eb; border-left: 4px solid #d4af37; border-radius: 10px; padding: 12px 16px; margin-top: 10px; margin-bottom: -5px;">
-                <div style="display: flex; align-items: center; gap: 8px;">
-                    <span style="background: #0b1f52; color: #d4af37; font-weight: 700; font-size: 11px; padding: 3px 8px; border-radius: 5px;">#{idx+1}</span>
-                    <span style="font-weight: 700; color: #0b1f52; font-size: 14px;">{field["label"]}</span>
-                    <span style="font-size: 11px; color: #9ca3af; margin-left: auto;">{len(field["content"])}자</span>
-                </div>
-            </div>
-            ''', unsafe_allow_html=True)
-            # st.code 는 우측 상단에 복사버튼이 기본 내장됨
-            st.code(field['content'], language="text")
-    
-    # ── 이전 분석 이력 ──
-    if len(st.session_state.scan_results) > 1:
-        with st.expander(f"🕒 이전 분석 이력 ({len(st.session_state.scan_results)-1}개)", expanded=False):
-            for old in st.session_state.scan_results[1:]:
-                st.markdown(f"**#{old['scan_num']} · {old['time_str']} · {old['detected_page']}** — {len(old['fields'])}개 문구")
-                for f in old['fields']:
-                    st.caption(f"  • {f['label']}")
+    st.info("💡 **안내:** 다운로드한 `.html` 파일을 더블클릭하면 웹 브라우저(크롬, 엣지 등)에서 서식과 로고가 적용된 깔끔한 보고서를 확인하고 바로 인쇄/PDF 저장하실 수 있습니다.")
 
 st.markdown('<div style="text-align:center;padding:28px 0 10px;color:#9ca3af;font-size:11px;">© 2026 중소기업경영지원단 · 벤처인증 AI 마스터 컨설턴트</div>', unsafe_allow_html=True)
