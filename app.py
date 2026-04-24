@@ -95,6 +95,7 @@ def generate_branded_html(topic, sections):
     """
     css = r"""
     @import url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css');
+    @import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;500;600;700&display=swap');
     
     @page { size: A4 portrait; margin: 0; }
     * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -102,9 +103,9 @@ def generate_branded_html(topic, sections):
     body {
         font-family: 'Pretendard Variable', Pretendard, 'Noto Sans KR', -apple-system, sans-serif;
         font-size: 14px;
-        color: #1A1A1A;
+        color: #2B2416;
         line-height: 1.7;
-        background: #E8E0E0;
+        background: #2B2416;
         display: flex;
         flex-direction: column;
         align-items: center;
@@ -113,14 +114,14 @@ def generate_branded_html(topic, sections):
         font-weight: 400;
     }
     
-    /* A4 페이지 규격 */
+    /* A4 페이지 규격 — 샴페인 크림 배경 */
     .page {
         width: 210mm;
         min-height: 297mm;
         max-height: 297mm;
-        background: white;
+        background: linear-gradient(135deg, #FAF6EE 0%, #F5EDD9 100%);
         margin-bottom: 15px;
-        box-shadow: 0 4px 20px rgba(0,0,0,0.08);
+        box-shadow: 0 8px 32px rgba(0,0,0,0.35), 0 2px 8px rgba(201,169,97,0.15);
         position: relative;
         overflow: hidden;
         page-break-after: always;
@@ -129,20 +130,33 @@ def generate_branded_html(topic, sections):
         flex-direction: column;
     }
     
+    /* 종이 질감 표현 — 미세한 노이즈 텍스처 */
+    .page::before {
+        content: '';
+        position: absolute;
+        inset: 0;
+        background-image: 
+            radial-gradient(circle at 20% 80%, rgba(201,169,97,0.06) 0%, transparent 50%),
+            radial-gradient(circle at 80% 20%, rgba(139,111,62,0.05) 0%, transparent 50%);
+        pointer-events: none;
+        z-index: 1;
+    }
+    .page > * { position: relative; z-index: 2; }
+    
     /* 인쇄 최적화 */
     @media print {
         * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; color-adjust: exact !important; }
         body { background: white !important; padding: 0 !important; }
-        .page { box-shadow: none !important; margin: 0 !important; page-break-after: always; }
+        .page { box-shadow: none !important; margin: 0 !important; page-break-after: always; background: linear-gradient(135deg, #FAF6EE 0%, #F5EDD9 100%) !important; }
         .page:last-child { page-break-after: avoid; }
         .cover-page { background: linear-gradient(135deg, #0A1628 0%, #0F2847 40%, #1B3A6B 100%) !important; }
-        .section-badge { background: linear-gradient(135deg, #0F2847, #1B3A6B) !important; color: white !important; }
-        .v-item { background: #FDF8F0 !important; border-left: 4px solid #C9A961 !important; }
+        .section-badge { background: linear-gradient(135deg, #8B6F3E, #C9A961) !important; color: white !important; }
+        .v-item { background: linear-gradient(135deg, #FFFBF0, #F9F1DC) !important; border-left: 4px solid #C9A961 !important; }
         .highlight-box { background: linear-gradient(135deg, #1B3A6B, #2C5282) !important; color: white !important; }
     }
     
     /* =========================================
-       📕 표지 페이지 — 다크 네이비 + 골드 타이포그래피
+       📕 표지 페이지 — 다크 네이비 + 골드 (유지)
        ========================================= */
     .cover-page {
         background: linear-gradient(135deg, #0A1628 0%, #0F2847 40%, #1B3A6B 100%);
@@ -150,7 +164,20 @@ def generate_branded_html(topic, sections):
         position: relative;
     }
     
-    /* 골드 데코 - 배경 장식 */
+    /* 골드 장식 — 4귀퉁이 코너 데코 */
+    .cover-page .corner-deco {
+        position: absolute;
+        width: 60px;
+        height: 60px;
+        border: 2px solid rgba(201,169,97,0.6);
+        z-index: 3;
+    }
+    .cover-page .corner-tl { top: 30px; left: 30px; border-right: none; border-bottom: none; }
+    .cover-page .corner-tr { top: 30px; right: 30px; border-left: none; border-bottom: none; }
+    .cover-page .corner-bl { bottom: 30px; left: 30px; border-right: none; border-top: none; }
+    .cover-page .corner-br { bottom: 30px; right: 30px; border-left: none; border-top: none; }
+    
+    /* 골드 데코 - 배경 조명 효과 */
     .cover-page::before {
         content: '';
         position: absolute;
@@ -158,7 +185,7 @@ def generate_branded_html(topic, sections):
         right: -20%;
         width: 70%;
         height: 70%;
-        background: radial-gradient(ellipse, rgba(201,169,97,0.18) 0%, transparent 60%);
+        background: radial-gradient(ellipse, rgba(201,169,97,0.22) 0%, transparent 60%);
         pointer-events: none;
     }
     .cover-page::after {
@@ -168,7 +195,7 @@ def generate_branded_html(topic, sections):
         left: -15%;
         width: 60%;
         height: 60%;
-        background: radial-gradient(ellipse, rgba(201,169,97,0.12) 0%, transparent 60%);
+        background: radial-gradient(ellipse, rgba(201,169,97,0.15) 0%, transparent 60%);
         pointer-events: none;
     }
     
@@ -191,118 +218,138 @@ def generate_branded_html(topic, sections):
         object-fit: cover;
         background: white;
         margin-bottom: 30px;
-        box-shadow: 0 8px 32px rgba(201,169,97,0.35);
+        box-shadow: 0 8px 32px rgba(201,169,97,0.45), 0 0 0 8px rgba(201,169,97,0.1);
     }
     
     .cover-brand {
-        font-size: 54px;
+        font-size: 64px;
         font-weight: 900;
-        letter-spacing: 10px;
-        background: linear-gradient(180deg, #F4D98A 0%, #C9A961 50%, #8B6F3E 100%);
+        letter-spacing: 14px;
+        background: linear-gradient(180deg, #F4D98A 0%, #E6C770 30%, #C9A961 60%, #8B6F3E 100%);
         -webkit-background-clip: text;
         background-clip: text;
         -webkit-text-fill-color: transparent;
         color: #C9A961;
         line-height: 1.1;
-        margin-bottom: 10px;
-        text-indent: 10px;
+        margin-bottom: 12px;
+        text-indent: 14px;
+        filter: drop-shadow(0 2px 8px rgba(201,169,97,0.3));
     }
     
     .cover-subbrand {
         font-size: 14px;
         font-weight: 500;
-        letter-spacing: 6px;
-        color: rgba(201,169,97,0.9);
+        letter-spacing: 8px;
+        color: rgba(244,217,138,0.85);
         text-transform: uppercase;
-        margin-bottom: 24px;
-        text-indent: 6px;
+        margin-bottom: 28px;
+        text-indent: 8px;
+        font-family: 'Cormorant Garamond', serif;
+        font-style: italic;
     }
     
     .cover-divider {
-        width: 80px;
+        width: 100px;
         height: 2px;
-        background: linear-gradient(90deg, transparent, #C9A961, transparent);
-        margin-bottom: 28px;
+        background: linear-gradient(90deg, transparent, #C9A961, #F4D98A, #C9A961, transparent);
+        margin-bottom: 32px;
+        position: relative;
     }
+    .cover-divider::before,
+    .cover-divider::after {
+        content: '◆';
+        position: absolute;
+        top: -9px;
+        color: #C9A961;
+        font-size: 14px;
+    }
+    .cover-divider::before { left: -4px; }
+    .cover-divider::after { right: -4px; }
     
     .cover-title {
         font-size: 32px;
         font-weight: 700;
         letter-spacing: 4px;
         color: white;
-        margin-bottom: 50px;
+        margin-bottom: 60px;
     }
     
     .cover-topic-label {
-        font-size: 12px;
-        font-weight: 500;
-        letter-spacing: 3px;
-        color: rgba(201,169,97,0.9);
+        font-size: 11px;
+        font-weight: 600;
+        letter-spacing: 4px;
+        color: #F4D98A;
         text-transform: uppercase;
-        margin-bottom: 14px;
+        margin-bottom: 18px;
     }
     
     .cover-topic {
         font-size: 22px;
         font-weight: 500;
-        color: rgba(255,255,255,0.92);
+        color: rgba(255,255,255,0.94);
         max-width: 80%;
         text-align: center;
-        line-height: 1.5;
+        line-height: 1.55;
         letter-spacing: 0.5px;
+        padding: 20px 40px;
+        border-top: 1px solid rgba(201,169,97,0.4);
+        border-bottom: 1px solid rgba(201,169,97,0.4);
     }
     
     .cover-footer {
         padding: 18px 20mm;
-        background: white;
-        border-top: 2px solid #C9A961;
-        color: #555;
+        background: linear-gradient(90deg, #F4D98A, #C9A961, #F4D98A);
+        color: #0A1628;
         font-size: 10px;
         text-align: center;
-        letter-spacing: 1px;
+        letter-spacing: 2px;
+        font-weight: 700;
     }
     
     /* =========================================
-       📄 내용 페이지 헤더 — 골드 라인 + 뱃지
+       📄 내용 페이지 — 샴페인 크림 배경
        ========================================= */
     .page-header {
         padding: 15mm 15mm 10mm;
-        border-bottom: 2px solid #E2E8F0;
+        border-bottom: 1px solid rgba(201,169,97,0.35);
         position: relative;
         display: flex;
         align-items: center;
         gap: 16px;
+        background: linear-gradient(180deg, rgba(201,169,97,0.08) 0%, transparent 100%);
     }
     .page-header::after {
         content: '';
         position: absolute;
-        bottom: -2px;
+        bottom: -1px;
         left: 0;
-        width: 150px;
+        width: 180px;
         height: 2px;
-        background: linear-gradient(90deg, #C9A961, transparent);
+        background: linear-gradient(90deg, #C9A961 0%, #F4D98A 50%, transparent 100%);
     }
     
     .header-logo {
-        width: 42px;
-        height: 42px;
+        width: 44px;
+        height: 44px;
         border-radius: 50%;
         border: 2px solid #C9A961;
         object-fit: cover;
         background: white;
         flex-shrink: 0;
+        box-shadow: 0 2px 8px rgba(201,169,97,0.3);
     }
     
     .section-badge {
-        background: linear-gradient(135deg, #0F2847, #1B3A6B);
+        background: linear-gradient(135deg, #8B6F3E 0%, #C9A961 50%, #8B6F3E 100%);
         color: white;
-        padding: 5px 14px;
+        padding: 5px 15px;
         border-radius: 20px;
-        font-size: 11px;
+        font-size: 10.5px;
         font-weight: 700;
-        letter-spacing: 1.5px;
-        border: 1px solid rgba(201,169,97,0.3);
+        letter-spacing: 2px;
+        border: 1px solid rgba(244,217,138,0.5);
         text-transform: uppercase;
+        box-shadow: 0 2px 6px rgba(139,111,62,0.25);
     }
     
     .page-title {
@@ -314,14 +361,14 @@ def generate_branded_html(topic, sections):
     }
     
     /* =========================================
-       📝 본문 — 가독성 최우선
+       📝 본문 — 샴페인 크림에서 고급감 업
        ========================================= */
     .page-body {
         flex: 1;
-        padding: 10mm 15mm;
+        padding: 12mm 15mm;
         font-size: 14px;
         line-height: 1.85;
-        color: #1F2937;
+        color: #3A2F1E;
         overflow: hidden;
     }
     
@@ -329,87 +376,104 @@ def generate_branded_html(topic, sections):
         margin-bottom: 11px;
     }
     
-    /* 서브 섹션 제목 (예: "1. 신청기술 요약") */
+    /* 서브 섹션 제목 */
     .sub-title {
         font-size: 16px;
         font-weight: 800;
         color: #0F2847;
         margin: 22px 0 12px;
-        padding-left: 14px;
+        padding: 6px 14px 6px 16px;
         border-left: 4px solid #C9A961;
+        background: linear-gradient(90deg, rgba(201,169,97,0.12) 0%, transparent 80%);
         letter-spacing: -0.3px;
+        border-radius: 0 6px 6px 0;
     }
     .sub-title:first-child {
         margin-top: 0;
     }
     
-    /* V자 요약 박스 - RSV info-box 스타일 */
+    /* V자 요약 박스 — 더 럭셔리하게 */
     .v-item {
-        background: #FDF8F0;
+        background: linear-gradient(135deg, #FFFBF0 0%, #F9F1DC 100%);
         border-left: 4px solid #C9A961;
-        padding: 12px 18px;
-        border-radius: 0 8px 8px 0;
-        margin-bottom: 11px;
+        padding: 13px 20px;
+        border-radius: 0 10px 10px 0;
+        margin-bottom: 12px;
         display: flex;
-        gap: 12px;
+        gap: 14px;
         line-height: 1.7;
+        box-shadow: 0 1px 3px rgba(139,111,62,0.08), inset 0 1px 0 rgba(255,255,255,0.6);
     }
     .v-item .v-mark {
-        color: #A37C3E;
-        font-size: 18px;
+        color: #8B6F3E;
+        font-size: 20px;
         font-weight: 900;
         flex-shrink: 0;
-        line-height: 1.5;
+        line-height: 1.4;
+        font-family: 'Cormorant Garamond', serif;
     }
     .v-item .v-content {
-        color: #1A1A1A;
+        color: #2B2416;
         font-size: 13.5px;
         font-weight: 500;
     }
     .v-item .v-content strong {
         color: #0F2847;
         font-weight: 800;
+        background: linear-gradient(180deg, transparent 65%, rgba(201,169,97,0.25) 65%);
+        padding: 0 2px;
     }
     
     /* 불릿 리스트 */
     .bullet-item {
-        padding: 5px 0 5px 24px;
+        padding: 6px 0 6px 26px;
         position: relative;
-        color: #1F2937;
+        color: #3A2F1E;
         font-size: 13.5px;
         line-height: 1.75;
     }
     .bullet-item::before {
         content: '◆';
         color: #C9A961;
-        font-size: 10px;
+        font-size: 11px;
         position: absolute;
         left: 8px;
         top: 9px;
     }
+    .bullet-item strong {
+        color: #0F2847;
+        font-weight: 700;
+        background: linear-gradient(180deg, transparent 65%, rgba(201,169,97,0.25) 65%);
+        padding: 0 2px;
+    }
     
     /* 일반 단락 */
     .body-text {
-        color: #1F2937;
+        color: #3A2F1E;
         font-size: 13.5px;
         line-height: 1.8;
         margin-bottom: 10px;
     }
+    .body-text strong {
+        color: #0F2847;
+        font-weight: 700;
+    }
     
-    /* 하이라이트 박스 - 중요 정보 강조 */
+    /* 하이라이트 박스 - 고급 네이비 */
     .highlight-box {
         background: linear-gradient(135deg, #1B3A6B, #2C5282);
         color: white;
         border-radius: 10px;
         padding: 16px 22px;
         margin: 14px 0;
-        box-shadow: 0 4px 12px rgba(27,58,107,0.2);
+        box-shadow: 0 4px 14px rgba(27,58,107,0.25);
+        border: 1px solid rgba(201,169,97,0.3);
     }
     .highlight-box .hl-label {
         font-size: 11px;
         font-weight: 700;
         letter-spacing: 2px;
-        color: rgba(201,169,97,0.95);
+        color: #F4D98A;
         text-transform: uppercase;
         margin-bottom: 6px;
     }
@@ -428,18 +492,28 @@ def generate_branded_html(topic, sections):
         object-fit: cover;
         border-top: 2px solid #C9A961;
         display: block;
+        box-shadow: 0 -2px 8px rgba(201,169,97,0.15);
     }
     
-    /* 페이지 번호 */
+    /* 페이지 번호 - 골드 프레임 */
     .page-number {
         position: absolute;
-        bottom: 4mm;
-        right: 8mm;
+        bottom: 32mm;
+        right: 12mm;
         font-size: 10px;
-        color: #C9A961;
+        color: #8B6F3E;
         font-weight: 700;
-        letter-spacing: 1.5px;
+        letter-spacing: 2px;
         z-index: 10;
+        font-family: 'Cormorant Garamond', serif;
+    }
+    .page-number::before {
+        content: '— ';
+        color: #C9A961;
+    }
+    .page-number::after {
+        content: ' —';
+        color: #C9A961;
     }
     """
 
@@ -497,13 +571,17 @@ def generate_branded_html(topic, sections):
 
 <!-- 📕 표지 페이지 -->
 <div class="page cover-page">
+    <div class="corner-deco corner-tl"></div>
+    <div class="corner-deco corner-tr"></div>
+    <div class="corner-deco corner-bl"></div>
+    <div class="corner-deco corner-br"></div>
     <div class="cover-inner">
         <img src="{LOGO_SRC}" class="cover-logo" alt="로고">
         <div class="cover-brand">RSV</div>
         <div class="cover-subbrand">Rich Secret Vault · 부자들의 비밀금고</div>
         <div class="cover-divider"></div>
         <div class="cover-title">벤처인증 마스터 컨설팅 리포트</div>
-        <div class="cover-topic-label">— 신청 기술 —</div>
+        <div class="cover-topic-label">— Subject Technology —</div>
         <div class="cover-topic">{topic}</div>
     </div>
     <div class="cover-footer">
@@ -556,39 +634,46 @@ def get_sample_sections():
     """프리미엄 디자인 테스트용 샘플 데이터 — Claude API 호출 없이 디자인만 확인"""
     sample_raw = """### [1. 신청기술 요약 및 표준 양식]
 - 신청기술(제품/서비스)명: 데이터기반 고강도·경량화 골판지 박스 구조 최적화 설계 기술
-- 신청기술(제품/서비스)요약: AI 시뮬레이션 기반 골판지 설계 자동화 기술
+- 신청기술(제품/서비스)요약: AI 유한요소해석(FEA) 기반 골판지 박스 구조 자동 설계 플랫폼. 10년간 축적된 실측 데이터와 머신러닝 알고리즘을 결합하여 기존 경험 의존적 설계 방식 대비 설계시간 90% 단축, 재료비 25% 절감을 실현하는 B2B SaaS 솔루션
 
-V 기존 시장에 [박스 과잉설계로 인한 물류비 증가 문제]가 있는데, [경험 의존적 설계와 개별 테스트 부재]라는 이유로 제조사들이 여전히 불편을 겪고 있음
-V 당사에서 [유한요소해석(FEA) 기반 구조 최적화 알고리즘]으로 해결책을 찾았으며, 기존 시장 기술과 [설계 시간 90% 단축 + 재료비 25% 절감]이라는 확실한 기술적 차이를 보유
-V 현재 당사 보유/개발 중 기술명은 [AI 골판지 최적설계 시스템], 전체 시장은 [국내 3.2조원 규모]이며 잠재 고객 니즈 충족 시 [연평균 12% 성장] 기대
-V 당사 기술은 [머신러닝 기반 구조해석 자동화]를 갖고 있으며 [설계 리드타임 단축과 품질 균일화]라는 이유로 혁신적 해결책, 잠재 고객 만족도가 높을 수 있음
-V 기술에 대한 [특허 2건 출원 및 1건 등록]이며 [5명의 R&D 전담 조직] 보유, 끊임없는 R&D로 지속 발전 가능한 기술적 역량 보유
-V 시장진입을 위해 [국내 박람회 3회 참가 및 파일럿 고객 확보] 진행 중, 현재 [12개 기업 확보], 향후 [수출 시장 및 ASEAN 진출] 수립하여 진행 예정
-V 당사 성과가 가능한 이유는 [10년 이상 축적된 포장 데이터와 전문 인력]이 있기 때문이며 향후 [매출 3배 성장]의 공격적 성장을 해낼 것임
+V 기존 시장에 [박스 과잉설계로 인한 물류비 증가와 재료 낭비 문제]가 있는데, [경험 의존적 설계 관행과 개별 시험 인프라 부재]라는 이유로 중소 제조사들이 여전히 불편을 겪고 있음
+V 당사에서 [유한요소해석(FEA) 기반 구조 최적화 알고리즘과 실측 데이터베이스 연계 시스템]으로 해결책을 찾았으며, 기존 시장 기술과 [설계 시간 90% 단축 + 재료비 25% 절감 + 품질 편차 80% 감소]라는 확실한 기술적 차이를 보유
+V 현재 당사 보유/개발 중 기술명은 [AI 골판지 최적설계 시스템 OptiPack Pro], 전체 시장은 [국내 3.2조원, 글로벌 58조원 규모]이며 잠재 고객 니즈 충족 시 [연평균 12% 고성장] 기대
+V 당사 기술은 [머신러닝 기반 구조해석 자동화 및 실시간 비용 산정 기능]을 갖고 있으며 [설계 리드타임 단축과 품질 균일화로 제조 경쟁력 강화]라는 이유로 혁신적 해결책, 잠재 고객 만족도가 높을 수 있음
+V 기술에 대한 [특허 2건 출원 · 1건 등록 · 실용신안 1건 보유]이며 [전담 R&D 조직 5명(박사 2, 석사 3)] 보유, 끊임없는 R&D로 지속 발전 가능한 기술적 역량 보유
+V 시장진입을 위해 [국내 주요 박람회 3회 참가 · 파일럿 고객 12개사 확보 · 대학 산학협력 5건] 진행 중, 현재 [연 매출 12억원 규모 시장 확보], 향후 [수출 시장 및 ASEAN 진출 · Series A 투자 유치] 계획 수립하여 진행 예정
+V 당사 성과가 가능한 이유는 [10년 이상 축적된 포장 실측 데이터 25만 건과 포장 분야 국내 최고 수준 전문 인력]이 있기 때문이며 향후 [3년 내 매출 3배 성장, 수출 비중 40% 달성]의 공격적 성장을 해낼 것임
 
 ### [2. 개발배경 및 원인분석]
-• 국내 포장산업은 약 40조 규모이나 골판지 박스 설계는 여전히 경험 의존적 방식에 머물러 있음
-• 대기업 물류사들이 연간 수백억 원을 박스 과잉설계로 낭비하고 있어 시장 니즈가 명확함
-• 친환경 규제 강화로 재료 절감 요구가 급증하며, 구조해석 기반 최적화 기술의 필요성이 대두됨
-• 기존 소프트웨어는 대부분 해외 제품이며 고가·복잡해 중소 제조사 접근성이 낮음
+• 국내 포장산업은 약 40조원 규모로 성장하고 있으나, 골판지 박스 설계는 여전히 경험 의존적 방식에 머물러 있어 설계 효율성이 현저히 낮음
+• 대기업 물류사들은 연간 수백억 원을 박스 과잉설계로 낭비하고 있으며, 이는 ESG 경영 기조와도 정면으로 배치되는 구조적 문제
+• 2023년 이후 친환경 규제 강화(EU CBAM, 국내 포장재 재질 규제)로 재료 절감 요구가 급증하고 있으며, 구조해석 기반 최적화 기술의 필요성이 전례 없이 대두됨
+• 기존 설계 소프트웨어는 대부분 해외 제품(독일 TOPS, 미국 Artios CAD 등)이며 고가·복잡·한글 미지원으로 국내 중소 제조사의 실질적 접근성이 매우 낮은 실정
+• 당사는 이러한 시장 격차를 해소하고 국내 포장 산업의 디지털 전환을 선도하기 위해 본 기술 개발에 착수
 
 ### [3. 경쟁력 확보방안]
-• 독자적 AI 알고리즘: 10년 이상 축적된 실측 데이터 기반 머신러닝 모델로 해외 경쟁사 대비 정확도 우위
-• 설계 리드타임 단축: 기존 2주 → 1일 이내로 설계 완성, 고객 대응력 극대화
-• 비용 구조 우위: 해외 솔루션 대비 1/3 가격대로 중소 제조사 진입장벽 해소
-• 지속적 고도화: 전담 R&D 조직 운영으로 매년 2회 이상 알고리즘 업데이트
+1. 독자적 AI 알고리즘: 10년 이상 축적된 실측 데이터 25만 건 기반의 머신러닝 모델로 해외 경쟁사 대비 한국 골판지 사양 적합도 30% 이상 우위
+2. 설계 리드타임 혁신적 단축: 기존 2주 소요 공정을 1일 이내로 단축하여 고객사의 시장 대응력을 극대화
+3. 압도적 비용 구조 우위: 해외 솔루션 대비 1/3 수준의 가격대로 중소 제조사의 진입장벽을 완전히 해소
+4. 지속적 기술 고도화: 전담 R&D 조직 운영으로 매년 2회 이상 알고리즘 업데이트 및 신규 기능 추가
+5. 국내 최초 한글 완벽 지원: 한국 포장 업계 용어와 KS 규격을 100% 반영한 UI/UX 설계
 
 ### [4. 추진경과 및 향후 계획]
-1. 2022년: 기술 기획 및 핵심 알고리즘 프로토타입 개발 완료
-2. 2023년: 특허 출원 2건, 국내 파일럿 고객 3개사 확보
-3. 2024년: 정식 제품 출시 및 국내 박람회 참가, 12개 기업 계약
-4. 2025년: 동남아(베트남/태국) 수출 확대 및 추가 R&D로 AI 정확도 향상 예정
+1. 2022년 1분기: 기술 기획 수립 및 핵심 알고리즘 프로토타입 개발 착수
+2. 2022년 4분기: 알고리즘 검증 완료 및 실증 테스트 착수
+3. 2023년 2분기: 특허 출원 2건 및 첫 상업 버전 Alpha 출시
+4. 2023년 4분기: 국내 파일럿 고객 3개사 확보 및 피드백 반영
+5. 2024년 2분기: 정식 제품 출시 및 국내 박람회 3회 참가
+6. 2024년 4분기: 12개 기업과 정식 계약 체결, 연 매출 12억원 달성
+7. 2025년 계획: 동남아(베트남·태국) 수출 개시 및 AI 정확도 추가 고도화
+8. 2026년 계획: Series A 투자 유치 (목표 50억원) 및 글로벌 진출 본격화
 
 ### [5. 목표시장 및 고객정의]
-• 1차 타겟: 국내 중소 골판지 제조사 약 3,500개사 (시장 규모 1조원 추정)
-• 2차 타겟: 중견 물류기업 및 이커머스 포장 담당 (시장 규모 8,000억원)
-• 3차 타겟: ASEAN 지역 포장 기업 (시장 규모 2.5조원)
-• 핵심 페인포인트: 재료비 절감, 설계 시간 단축, 품질 균일화"""
+• 1차 타겟(Primary): 국내 중소 골판지 제조사 약 3,500개사 — 시장 규모 1조원, 초기 2년간 집중 공략
+• 2차 타겟(Secondary): 중견 물류기업 및 이커머스 포장 담당 — 시장 규모 8,000억원, 3년차부터 확대
+• 3차 타겟(Tertiary): ASEAN 지역(베트남·태국·인도네시아) 포장 기업 — 시장 규모 2.5조원, 수출 본격화
+• 핵심 페인포인트 분석: 재료비 절감(ROI 12개월), 설계 시간 단축(생산성 5배), 품질 균일화(불량률 80% 감소)
+• 고객 의사결정 프로세스: 경영진(비용/ROI), 설계팀(사용 편의성), 품질팀(신뢰도) 3단 어프로치"""
     return sample_raw.split('### ')
 
 
