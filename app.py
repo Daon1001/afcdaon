@@ -392,52 +392,69 @@ if st.session_state.admin_mode and is_admin:
     
     with tab1:
         logs = user_db.get("usage_logs", [])
-        if not logs:
-            st.info("아직 사용량 기록이 없습니다.")
+        # 🛡️ 안전 필터: 필수 필드가 모두 있는 로그만 사용
+        REQUIRED_FIELDS = ["timestamp", "email", "model", "input_tokens", "output_tokens", "cost_usd"]
+        valid_logs = [l for l in logs if isinstance(l, dict) and all(k in l for k in REQUIRED_FIELDS)]
+        
+        if not valid_logs:
+            if logs:
+                st.warning(f"⚠️ 로그가 {len(logs)}건 있지만 형식이 맞지 않아 표시할 수 없습니다. 새 로그가 쌓이면 자동으로 표시됩니다.")
+            else:
+                st.info("아직 사용량 기록이 없습니다. API를 호출하면 여기에 표시됩니다.")
         else:
-            df = pd.DataFrame(logs)
-            df['timestamp'] = pd.to_datetime(df['timestamp'])
-            df['date'] = df['timestamp'].dt.date
+            df = pd.DataFrame(valid_logs)
+            df['timestamp'] = pd.to_datetime(df['timestamp'], errors='coerce')
+            df = df.dropna(subset=['timestamp'])
             
-            st.markdown("#### 📈 전체 요약")
-            sc1, sc2, sc3, sc4 = st.columns(4)
-            with sc1:
-                st.markdown(f'<div class="admin-stat-card"><div class="label">전체 호출</div><div class="value">{len(df):,}</div><div class="sub">건</div></div>', unsafe_allow_html=True)
-            with sc2:
-                ti = df['input_tokens'].sum()
-                st.markdown(f'<div class="admin-stat-card"><div class="label">입력 토큰</div><div class="value">{ti:,}</div><div class="sub">tokens</div></div>', unsafe_allow_html=True)
-            with sc3:
-                to = df['output_tokens'].sum()
-                st.markdown(f'<div class="admin-stat-card"><div class="label">출력 토큰</div><div class="value">{to:,}</div><div class="sub">tokens</div></div>', unsafe_allow_html=True)
-            with sc4:
-                tc = df['cost_usd'].sum()
-                st.markdown(f'<div class="admin-stat-card"><div class="label">누적 비용</div><div class="value">${tc:.2f}</div><div class="sub">≈ ₩{tc*USD_TO_KRW:,.0f}</div></div>', unsafe_allow_html=True)
-            
-            st.divider()
-            st.markdown("#### 👥 사용자별 비용 순위")
-            us = df.groupby('email').agg(
-                호출수=('email', 'count'),
-                입력토큰=('input_tokens', 'sum'),
-                출력토큰=('output_tokens', 'sum'),
-                비용USD=('cost_usd', 'sum'),
-            ).reset_index()
-            us['비용원'] = (us['비용USD'] * USD_TO_KRW).round(0).astype(int)
-            us = us.sort_values('비용USD', ascending=False)
-            us['비용USD'] = us['비용USD'].round(4)
-            st.dataframe(us, use_container_width=True, hide_index=True)
-            
-            st.divider()
-            st.markdown("#### 📅 일별 비용 추이 (최근 30일)")
-            recent = df[df['timestamp'] >= (datetime.now() - pd.Timedelta(days=30))]
-            if len(recent) > 0:
-                daily = recent.groupby('date').agg(호출수=('email', 'count'), 비용USD=('cost_usd', 'sum')).reset_index()
-                st.bar_chart(daily.set_index('date')['비용USD'], height=250)
-            
-            st.markdown("#### 🤖 모델별 사용 분포")
-            ms = df.groupby('model').agg(호출수=('email', 'count'), 비용USD=('cost_usd', 'sum')).reset_index()
-            ms['비용원'] = (ms['비용USD'] * USD_TO_KRW).round(0).astype(int)
-            ms['비용USD'] = ms['비용USD'].round(4)
-            st.dataframe(ms, use_container_width=True, hide_index=True)
+            if len(df) == 0:
+                st.info("표시할 사용량 기록이 없습니다.")
+            else:
+                df['date'] = df['timestamp'].dt.date
+                df['input_tokens'] = pd.to_numeric(df['input_tokens'], errors='coerce').fillna(0).astype(int)
+                df['output_tokens'] = pd.to_numeric(df['output_tokens'], errors='coerce').fillna(0).astype(int)
+                df['cost_usd'] = pd.to_numeric(df['cost_usd'], errors='coerce').fillna(0)
+                
+                st.markdown("#### 📈 전체 요약")
+                sc1, sc2, sc3, sc4 = st.columns(4)
+                with sc1:
+                    st.markdown(f'<div class="admin-stat-card"><div class="label">전체 호출</div><div class="value">{len(df):,}</div><div class="sub">건</div></div>', unsafe_allow_html=True)
+                with sc2:
+                    ti = int(df['input_tokens'].sum())
+                    st.markdown(f'<div class="admin-stat-card"><div class="label">입력 토큰</div><div class="value">{ti:,}</div><div class="sub">tokens</div></div>', unsafe_allow_html=True)
+                with sc3:
+                    to = int(df['output_tokens'].sum())
+                    st.markdown(f'<div class="admin-stat-card"><div class="label">출력 토큰</div><div class="value">{to:,}</div><div class="sub">tokens</div></div>', unsafe_allow_html=True)
+                with sc4:
+                    tc = float(df['cost_usd'].sum())
+                    st.markdown(f'<div class="admin-stat-card"><div class="label">누적 비용</div><div class="value">${tc:.2f}</div><div class="sub">≈ ₩{tc*USD_TO_KRW:,.0f}</div></div>', unsafe_allow_html=True)
+                
+                st.divider()
+                st.markdown("#### 👥 사용자별 비용 순위")
+                us = df.groupby('email').agg(
+                    호출수=('email', 'count'),
+                    입력토큰=('input_tokens', 'sum'),
+                    출력토큰=('output_tokens', 'sum'),
+                    비용USD=('cost_usd', 'sum'),
+                ).reset_index()
+                us['비용원'] = (us['비용USD'] * USD_TO_KRW).round(0).astype(int)
+                us = us.sort_values('비용USD', ascending=False)
+                us['비용USD'] = us['비용USD'].round(4)
+                st.dataframe(us, use_container_width=True, hide_index=True)
+                
+                st.divider()
+                st.markdown("#### 📅 일별 비용 추이 (최근 30일)")
+                recent = df[df['timestamp'] >= (datetime.now() - pd.Timedelta(days=30))]
+                if len(recent) > 0:
+                    daily = recent.groupby('date').agg(호출수=('email', 'count'), 비용USD=('cost_usd', 'sum')).reset_index()
+                    st.bar_chart(daily.set_index('date')['비용USD'], height=250)
+                else:
+                    st.caption("최근 30일 내 사용 기록이 없습니다.")
+                
+                st.markdown("#### 🤖 모델별 사용 분포")
+                ms = df.groupby('model').agg(호출수=('email', 'count'), 비용USD=('cost_usd', 'sum')).reset_index()
+                ms['비용원'] = (ms['비용USD'] * USD_TO_KRW).round(0).astype(int)
+                ms['비용USD'] = ms['비용USD'].round(4)
+                st.dataframe(ms, use_container_width=True, hide_index=True)
     
     with tab2:
         st.markdown("#### 👥 등록 사용자 목록")
@@ -524,12 +541,22 @@ if st.session_state.admin_mode and is_admin:
     with tab4:
         st.markdown("#### 📜 API 호출 상세 로그")
         logs = user_db.get("usage_logs", [])
-        if not logs:
-            st.info("로그가 없습니다.")
+        REQUIRED_FIELDS = ["timestamp", "email", "model", "input_tokens", "output_tokens", "cost_usd"]
+        valid_logs = [l for l in logs if isinstance(l, dict) and all(k in l for k in REQUIRED_FIELDS)]
+        
+        if not valid_logs:
+            st.info("표시할 로그가 없습니다.")
         else:
-            df_log = pd.DataFrame(logs).sort_values('timestamp', ascending=False)
+            df_log = pd.DataFrame(valid_logs).sort_values('timestamp', ascending=False)
+            df_log['cost_usd'] = pd.to_numeric(df_log['cost_usd'], errors='coerce').fillna(0)
+            df_log['input_tokens'] = pd.to_numeric(df_log['input_tokens'], errors='coerce').fillna(0).astype(int)
+            df_log['output_tokens'] = pd.to_numeric(df_log['output_tokens'], errors='coerce').fillna(0).astype(int)
             df_log['cost_krw'] = (df_log['cost_usd'] * USD_TO_KRW).round(0).astype(int)
-            df_log['timestamp'] = df_log['timestamp'].str[:19].str.replace('T', ' ')
+            df_log['timestamp'] = df_log['timestamp'].astype(str).str[:19].str.replace('T', ' ')
+            if 'action' not in df_log.columns:
+                df_log['action'] = '-'
+            else:
+                df_log['action'] = df_log['action'].fillna('-')
             df_log = df_log[['timestamp', 'email', 'action', 'model', 'input_tokens', 'output_tokens', 'cost_usd', 'cost_krw']]
             df_log.columns = ['시간', '사용자', '작업', '모델', '입력', '출력', '비용($)', '비용(₩)']
             
