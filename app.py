@@ -442,14 +442,53 @@ if st.session_state.admin_mode and is_admin:
                 st.dataframe(us, use_container_width=True, hide_index=True)
                 
                 st.divider()
-                st.markdown("#### 📅 일별 비용 추이 (최근 30일)")
-                recent = df[df['timestamp'] >= (datetime.now() - pd.Timedelta(days=30))]
-                if len(recent) > 0:
-                    daily = recent.groupby('date').agg(호출수=('email', 'count'), 비용USD=('cost_usd', 'sum')).reset_index()
-                    st.bar_chart(daily.set_index('date')['비용USD'], height=250)
-                else:
-                    st.caption("최근 30일 내 사용 기록이 없습니다.")
+                st.markdown("#### 📅 사용자별 일별 비용 추이")
                 
+                # 기간 선택
+                period_col1, period_col2 = st.columns([1, 3])
+                with period_col1:
+                    days_back = st.selectbox("표시 기간", [7, 14, 30, 60, 90], index=2,
+                                             format_func=lambda x: f"최근 {x}일")
+                
+                recent = df[df['timestamp'] >= (datetime.now() - pd.Timedelta(days=days_back))]
+                if len(recent) > 0:
+                    # 사용자별 일별 비용 피벗
+                    pivot_cost = recent.pivot_table(
+                        index='date', columns='email',
+                        values='cost_usd', aggfunc='sum', fill_value=0
+                    )
+                    
+                    # 📊 스택 막대차트 (사용자별 일별 누적)
+                    st.markdown("**📊 일별 비용 (사용자별 누적, USD)**")
+                    st.bar_chart(pivot_cost, height=300)
+                    st.caption("💡 색깔별로 사용자가 구분되며, 막대 높이는 일별 총 비용입니다.")
+                    
+                    # 📈 일별 호출수
+                    pivot_count = recent.pivot_table(
+                        index='date', columns='email',
+                        values='cost_usd', aggfunc='count', fill_value=0
+                    )
+                    st.markdown("**📈 일별 호출 수 (사용자별)**")
+                    st.bar_chart(pivot_count, height=250)
+                    
+                    # 📋 상세 피벗 테이블
+                    st.markdown("**📋 일별 상세 (USD)**")
+                    pivot_display = pivot_cost.copy()
+                    pivot_display['일별합계'] = pivot_display.sum(axis=1)
+                    pivot_display = pivot_display.round(4)
+                    pivot_display = pivot_display.sort_index(ascending=False)  # 최신 날짜 위로
+                    st.dataframe(pivot_display, use_container_width=True)
+                    
+                    # 📋 원화 환산 피벗 테이블
+                    st.markdown("**📋 일별 상세 (₩원)**")
+                    pivot_krw = (pivot_cost * USD_TO_KRW).round(0).astype(int)
+                    pivot_krw['일별합계'] = pivot_krw.sum(axis=1)
+                    pivot_krw = pivot_krw.sort_index(ascending=False)
+                    st.dataframe(pivot_krw, use_container_width=True)
+                else:
+                    st.caption(f"최근 {days_back}일 내 사용 기록이 없습니다.")
+                
+                st.divider()
                 st.markdown("#### 🤖 모델별 사용 분포")
                 ms = df.groupby('model').agg(호출수=('email', 'count'), 비용USD=('cost_usd', 'sum')).reset_index()
                 ms['비용원'] = (ms['비용USD'] * USD_TO_KRW).round(0).astype(int)
