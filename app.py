@@ -222,13 +222,18 @@ def claude_generate(prompt, model_id, max_tokens=8192, image_data=None, pdf_data
             blocks.append({"type": "image", "source": {"type": "base64", "media_type": "image/jpeg", "data": b64}})
         blocks.append({"type": "text", "text": prompt})
         
-        response = client.messages.create(model=model_id, max_tokens=max_tokens,
-                                          messages=[{"role": "user", "content": blocks}])
+        # 스트리밍 방식 (긴 응답도 안정적으로 처리)
+        with client.messages.stream(model=model_id, max_tokens=max_tokens,
+                                     messages=[{"role": "user", "content": blocks}]) as stream:
+            full_text = ""
+            for text in stream.text_stream:
+                full_text += text
+            final = stream.get_final_message()
         if user_email:
-            add_usage_log(user_email, model_id, response.usage.input_tokens, response.usage.output_tokens, action_type)
-        return {"ok": True, "text": response.content[0].text,
-                "input_tokens": response.usage.input_tokens, "output_tokens": response.usage.output_tokens,
-                "stop_reason": response.stop_reason}
+            add_usage_log(user_email, model_id, final.usage.input_tokens, final.usage.output_tokens, action_type)
+        return {"ok": True, "text": full_text,
+                "input_tokens": final.usage.input_tokens, "output_tokens": final.usage.output_tokens,
+                "stop_reason": final.stop_reason}
     except anthropic.RateLimitError as e:
         return {"ok": False, "error": f"Rate Limit 초과: {str(e)[:200]}"}
     except anthropic.APIStatusError as e:
