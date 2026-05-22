@@ -721,7 +721,7 @@ with col2:
 ### [10. 자금조달 계획의 구체적 방안]
 ### [11. 연계 가능 정책자금 추천]
 """
-                result = claude_generate(prompt, selected_model, max_tokens=16000,
+                result = claude_generate(prompt, selected_model, max_tokens=24000,
                                          user_email=st.session_state.authenticated_user,
                                          action_type="step2_report")
             pt.empty()
